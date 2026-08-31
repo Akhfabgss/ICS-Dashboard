@@ -25,13 +25,11 @@ export default function AuthLayout({
                   <Image
                     width={231}
                     height={48}
-                    src="./images/logo/auth-logo.svg"
-                    alt="Logo"
+                    className="bg-white p-5 rounded-md dark:bg-white dark:p-1 dark:rounded"
+                    src="/images/logo/framelo-logo2.png"
+                    alt="Framelo Logo"
                   />
                 </Link>
-                <p className="text-center text-gray-400 dark:text-white/60">
-                  Free and Open-Source Tailwind CSS Admin Dashboard Template
-                </p>
               </div>
             </div>
           </div>
