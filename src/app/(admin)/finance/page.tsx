@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
+import RoleGuard from "@/components/auth/RoleGuard";
 
 interface CashFlowItem {
   id: string; // ID Tampilan (Order/CF-xxx)
@@ -18,6 +19,14 @@ interface CashFlowItem {
 }
 
 export default function FinancePage() {
+  return (
+    <RoleGuard allowedRoles={["Owner", "Bendahara"]}>
+      <FinanceContent />
+    </RoleGuard>
+  );
+}
+
+function FinanceContent() {
   const [filterType, setFilterType] = useState<"all" | "income" | "expense">("all");
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);

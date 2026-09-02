@@ -36,11 +36,18 @@ export default function Home() {
 
   // 1. Kalkulasi 4 Stat Cards
   const stats = useMemo(() => {
-    // Total Revenue (Dari DP + Pelunasan Pesanan)
+    // Total Revenue (Dari DP + Pelunasan Pesanan + Pemasukan Kas Manual)
     const orderRevenue = orders.reduce(
       (acc, curr) => acc + Number(curr.dp_amount || 0) + Number(curr.repayment_amount || 0),
       0
     );
+
+    const financeIncome = finances.reduce(
+      (acc, curr) => acc + Number(curr.income || 0),
+      0
+    );
+
+    const totalRevenue = orderRevenue + financeIncome;
 
     // Total Expense (Dari Catatan Kas Pengeluaran)
     const totalExpense = finances.reduce(
@@ -48,11 +55,11 @@ export default function Home() {
       0
     );
 
-    const netProfit = orderRevenue - totalExpense;
+    const netProfit = totalRevenue - totalExpense;
     const totalOrdersCount = orders.length;
 
     return {
-      revenue: orderRevenue,
+      revenue: totalRevenue,
       expense: totalExpense,
       netProfit,
       totalOrders: totalOrdersCount,
@@ -208,7 +215,7 @@ export default function Home() {
         <div className="col-span-12 xl:col-span-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white">Peringatan Stok Menipis</h3>
-            <Link href="/products" className="text-xs text-brand-500 hover:underline">Kelola Stok</Link>
+            <Link href="/stock" className="text-xs text-brand-500 hover:underline">Kelola Stok</Link>
           </div>
           <div className="space-y-4">
             {loading ? (

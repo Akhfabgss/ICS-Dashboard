@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
-import { supabase } from "@/lib/supabase"; // Import Supabase Client
+import { supabase } from "@/lib/supabase";
 import {
   GridIcon,
   BoxIcon,
@@ -16,6 +16,8 @@ import {
   ShoppingCart,
   FileText,
   Wallet,
+  User,
+  Layers,
 } from "lucide-react";
 
 type NavItem = {
@@ -32,8 +34,13 @@ const navItems: NavItem[] = [
     path: "/",
   },
   {
+    icon: <Layers />,
+    name: "Stock",
+    path: "/stock",
+  },
+  {
     icon: <BoxIcon />,
-    name: "Stok & Produk",
+    name: "Produk",
     path: "/products",
   },
   {
@@ -51,14 +58,20 @@ const navItems: NavItem[] = [
     name: "Keuangan (Kas)",
     path: "/finance",
   },
+  {
+    icon: <User />,
+    name: "Pegawai",
+    path: "/pegawai",
+  },
 ];
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const pathname = usePathname();
 
-  // State untuk menyimpan Role User
+  // State untuk menyimpan Role & Status Loading Role
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [loadingRole, setLoadingRole] = useState(true);
 
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: "main";
@@ -67,31 +80,52 @@ const AppSidebar: React.FC = () => {
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // 1. Fetch Role User dari Supabase saat komponen di-mount
+  // 1. Fetch Role User dari Supabase
   useEffect(() => {
     const fetchUserRole = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", session.user.id)
-          .single();
+      setLoadingRole(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", session.user.id)
+            .single();
 
-        if (profile) {
-          setUserRole(profile.role);
+          if (profile) {
+            setUserRole(profile.role);
+          }
         }
+      } catch (error) {
+        console.error("Gagal mengambil role:", error);
+      } finally {
+        setLoadingRole(false);
       }
     };
 
     fetchUserRole();
   }, []);
 
-  // 2. Filter NavItems: Sembunyikan "/finance" jika role adalah 'Admin'
+  // 2. Filter Menu Berdasarkan Role (Strict Filter)
   const filteredNavItems = navItems.filter((item) => {
-    if (item.path === "/finance" && userRole === "Admin") {
-      return false; // Jangan tampilkan untuk Admin
+    // Jika role masih loading, sembunyikan menu sensitif sementara
+    if (loadingRole) {
+      if (item.path === "/finance" || item.path === "/pegawai") return false;
     }
+
+    const role = userRole?.trim();
+
+    // Menu Pegawai: HANYA untuk Owner
+    if (item.path === "/pegawai") {
+      return role === "Owner";
+    }
+
+    // Menu Keuangan (Kas): HANYA untuk Owner atau Bendahara (Staff di-hide)
+    if (item.path === "/finance") {
+      return role === "Owner" || role === "Bendahara";
+    }
+
     return true;
   });
 
@@ -298,7 +332,6 @@ const AppSidebar: React.FC = () => {
                   <HorizontaLDots />
                 )}
               </h2>
-              {/* Render items yang sudah di-filter berdasarkan role */}
               {renderMenuItems(filteredNavItems)}
             </div>
           </div>

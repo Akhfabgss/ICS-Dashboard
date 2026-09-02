@@ -4,12 +4,12 @@ import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
 import { Order, OrderStatus } from "@/types/order";
-import OrderFormModal from "@/components/orders/OrderFormModal";
-import OrderDetailModal from "@/components/orders/OrderDetailModal";
+import Link from "next/link";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // State Modals
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -54,6 +54,14 @@ export default function OrdersPage() {
       completedOrders,
     };
   }, [orders]);
+
+  // FILTER ORDERS BERDASARKAN SEARCH QUERY (NAMA PEMESAN)
+  const filteredOrders = useMemo(() => {
+    if (!searchQuery) return orders;
+    return orders.filter((order) =>
+      order.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [orders, searchQuery]);
 
   const updateStatus = async (id: string, newStatus: OrderStatus) => {
     const { error } = await supabase
@@ -123,15 +131,12 @@ export default function OrdersPage() {
             Kelola pesanan, status alur pengerjaan, dan rincian datanya.
           </p>
         </div>
-        <button
-          onClick={() => {
-            setOrderToEdit(null);
-            setIsFormOpen(true);
-          }}
-          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors"
+        <Link
+          href="/orders/create"
+          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors inline-block"
         >
           + Tambah Pesanan Baru
-        </button>
+        </Link>
       </div>
 
       {/* 2. RINGKASAN CARDS STATISTIK PESANAN */}
@@ -169,6 +174,17 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      {/* FILTER & SEARCH BARS */}
+      <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
+        <input
+          type="text"
+          placeholder="Cari nama pemesan..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs outline-none focus:border-brand-500"
+        />
+      </div>
+
       {/* 3. TABEL DATA PESANAN */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900">
         <div className="max-w-full overflow-x-auto">
@@ -188,12 +204,14 @@ export default function OrdersPage() {
                 <tr>
                   <td colSpan={6} className="text-center py-6">Memuat data...</td>
                 </tr>
-              ) : orders.length === 0 ? (
+              ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-6 text-gray-500">Belum ada pesanan terdaftar.</td>
+                  <td colSpan={6} className="text-center py-6 text-gray-500">
+                    {searchQuery ? "Tidak ada pesanan yang sesuai dengan pencarian." : "Belum ada pesanan terdaftar."}
+                  </td>
                 </tr>
               ) : (
-                orders.map((order) => (
+                filteredOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="px-4 py-3">
                       <p className="font-semibold text-gray-800 dark:text-white">{order.order_number}</p>
@@ -240,28 +258,25 @@ export default function OrdersPage() {
 
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            setSelectedDetail(order);
-                            setIsDetailOpen(true);
-                          }}
+                        {/* Link ke Halaman Detail */}
+                        <Link
+                          href={`/orders/${order.id}`}
                           className="px-2.5 py-1 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
                           title="Lihat Detail"
                         >
                           Detail
-                        </button>
+                        </Link>
 
-                        <button
-                          onClick={() => {
-                            setOrderToEdit(order);
-                            setIsFormOpen(true);
-                          }}
+                        {/* Link ke Halaman Edit */}
+                        <Link
+                          href={`/orders/edit/${order.id}`}
                           className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
                           title="Edit Order"
                         >
                           Edit
-                        </button>
+                        </Link>
 
+                        {/* Tombol Hapus */}
                         <button
                           onClick={() => handleDelete(order.id, order.order_number)}
                           className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors"
@@ -278,23 +293,6 @@ export default function OrdersPage() {
           </table>
         </div>
       </div>
-
-      <OrderFormModal
-        isOpen={isFormOpen}
-        orderToEdit={orderToEdit}
-        onClose={() => {
-          setIsFormOpen(false);
-          setOrderToEdit(null);
-        }}
-        onSuccess={fetchOrders}
-      />
-
-      <OrderDetailModal
-        order={selectedDetail}
-        isOpen={isDetailOpen}
-        onClose={() => setIsDetailOpen(false)}
-        onRefresh={fetchOrders}
-      />
     </div>
   );
 }

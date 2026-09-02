@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { supabase } from "@/lib/supabase";
@@ -10,7 +10,29 @@ import { useRouter } from "next/navigation";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
+  const [userName, setUserName] = useState("Loading...");
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", session.user.id)
+          .single();
+        if (data && data.full_name) {
+          setUserName(data.full_name);
+        } else {
+          setUserName("User");
+        }
+      } else {
+        setUserName("Guest");
+      }
+    };
+    fetchUser();
+  }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -44,7 +66,7 @@ export default function UserDropdown() {
         </span>
 
         <span className="block mr-1 font-medium text-theme-sm text-gray-800 dark:text-white">
-          Akhfa Bagas
+          {userName}
         </span>
 
         <svg
