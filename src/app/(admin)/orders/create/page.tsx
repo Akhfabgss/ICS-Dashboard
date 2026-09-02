@@ -60,12 +60,14 @@ export default function CreateOrderPage() {
 
     useEffect(() => {
         const fetchMasterData = async () => {
-            // Ambil role user login
+            // Ambil role user login & normalisasi
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
                 const { data: profile } = await supabase
                     .from("profiles").select("role").eq("id", session.user.id).single();
-                if (profile) setUserRole(profile.role);
+                if (profile?.role) {
+                    setUserRole(String(profile.role).toLowerCase().trim());
+                }
             }
 
             const [prodRes, addRes, staffRes] = await Promise.all([
@@ -73,7 +75,6 @@ export default function CreateOrderPage() {
                 supabase.from("add_ons").select("id, name, price").order("name"),
                 supabase.from("profiles")
                     .select("id, full_name, email, role")
-                    .in("role", ["staff", "designer", "admin", "owner", "bendahara"])
                     .order("full_name"),
             ]);
 
@@ -89,7 +90,9 @@ export default function CreateOrderPage() {
         fetchMasterData();
     }, []);
 
-    const isFinanceVisible = userRole !== "staff";
+    // Kebal huruf besar/kecil & spasi
+    const normalizedRole = (userRole || "").toLowerCase().trim();
+    const isFinanceVisible = normalizedRole !== "staff" && normalizedRole !== "designer" && normalizedRole !== "";
 
     const handleProductSelect = (selectedName: string) => {
         setProductName(selectedName);
@@ -147,7 +150,7 @@ export default function CreateOrderPage() {
             status: "Proses Design",
         };
 
-        // Tambahkan field keuangan hanya jika user bukan staff
+        // Tambahkan field keuangan hanya jika user diperbolehkan
         if (isFinanceVisible) {
             payload.frame_price = framePrice;
             payload.addons_price = addonsPrice;
@@ -156,7 +159,6 @@ export default function CreateOrderPage() {
             payload.discount_amount = discountAmount;
             payload.dp_amount = dpAmount;
             payload.repayment_amount = repaymentAmount;
-            // total_price, remaining_payment, is_paid_off = Generated Column, jangan disertakan
         }
 
         const { error } = await supabase.from("orders").insert([payload]);
@@ -230,7 +232,9 @@ export default function CreateOrderPage() {
                                     <option value="">Belum ada produk di database</option>
                                 ) : (
                                     productList.map((p) => (
-                                        <option key={p.id} value={p.name}>{p.name} (Rp {p.price.toLocaleString("id-ID")})</option>
+                                        <option key={p.id} value={p.name}>
+                                            {p.name} {isFinanceVisible ? `(Rp ${p.price.toLocaleString("id-ID")})` : ""}
+                                        </option>
                                     ))
                                 )}
                             </select>
@@ -258,7 +262,9 @@ export default function CreateOrderPage() {
                                         className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-sm transition-colors ${selectedAddons.includes(item.name) ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium" : "border-gray-200 dark:border-gray-800"}`}>
                                         <input type="checkbox" checked={selectedAddons.includes(item.name)} onChange={() => toggleAddon(item.name)}
                                             className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4" />
-                                        <span>{item.name} (+Rp {item.price.toLocaleString("id-ID")})</span>
+                                        <span>
+                                            {item.name} {isFinanceVisible ? `(+Rp ${item.price.toLocaleString("id-ID")})` : ""}
+                                        </span>
                                     </label>
                                 ))}
                             </div>
