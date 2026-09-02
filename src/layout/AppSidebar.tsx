@@ -313,8 +313,8 @@ const AppSidebar: React.FC = () => {
                 height={40}
               />
               <Image
-                className="hidden dark:block bg-white p-1 rounded"
-                src="/images/logo/framelo-logo2.png"
+                className="hidden dark:block"
+                src="/images/logo/framelo-logo3.png"
                 alt="Logo"
                 width={80}
                 height={40}

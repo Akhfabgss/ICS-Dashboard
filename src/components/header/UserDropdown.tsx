@@ -10,25 +10,35 @@ import { useRouter } from "next/navigation";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const [userName, setUserName] = useState("Loading...");
+  // Simpan data nama dan email di state ini
+  const [userProfile, setUserProfile] = useState<{ full_name: string; email: string }>({
+    full_name: "Loading...",
+    email: "",
+  });
   const router = useRouter();
 
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      if (session?.user) {
+        const userEmail = session.user.email || "";
+
+        // Ambil data profile dari tabel profiles
         const { data } = await supabase
           .from("profiles")
           .select("full_name")
           .eq("id", session.user.id)
           .single();
-        if (data && data.full_name) {
-          setUserName(data.full_name);
-        } else {
-          setUserName("User");
-        }
+
+        setUserProfile({
+          full_name: data?.full_name || "User",
+          email: userEmail,
+        });
       } else {
-        setUserName("Guest");
+        setUserProfile({
+          full_name: "Guest",
+          email: "",
+        });
       }
     };
     fetchUser();
@@ -66,7 +76,7 @@ export default function UserDropdown() {
         </span>
 
         <span className="block mr-1 font-medium text-theme-sm text-gray-800 dark:text-white">
-          {userName}
+          {userProfile.full_name}
         </span>
 
         <svg
@@ -95,10 +105,10 @@ export default function UserDropdown() {
       >
         <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
           <span className="block font-medium text-gray-800 text-theme-sm dark:text-white">
-            Akhfa Bagas Alfarizi
+            {userProfile.full_name}
           </span>
           <span className="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400">
-            bagas@framelo.com
+            {userProfile.email || "No Email"}
           </span>
         </div>
 

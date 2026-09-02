@@ -21,7 +21,7 @@ interface CashFlowItem {
 
 export default function FinancePage() {
   return (
-    <RoleGuard allowedRoles={["Owner", "Bendahara", "owner", "bendahara"]}>
+    <RoleGuard allowedRoles={["Owner", "Bendahara"]}>
       <FinanceContent />
     </RoleGuard>
   );
@@ -295,8 +295,8 @@ function FinanceContent() {
             <button
               onClick={() => setFilterType("all")}
               className={`px-3 py-1.5 rounded-lg transition ${filterType === "all"
-                  ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white"
-                  : "text-gray-500"
+                ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white"
+                : "text-gray-500"
                 }`}
             >
               Semua
@@ -304,8 +304,8 @@ function FinanceContent() {
             <button
               onClick={() => setFilterType("income")}
               className={`px-3 py-1.5 rounded-lg transition ${filterType === "income"
-                  ? "bg-white text-emerald-600 shadow-xs dark:bg-gray-700 dark:text-emerald-400"
-                  : "text-gray-500"
+                ? "bg-white text-emerald-600 shadow-xs dark:bg-gray-700 dark:text-emerald-400"
+                : "text-gray-500"
                 }`}
             >
               Pemasukan
@@ -313,8 +313,8 @@ function FinanceContent() {
             <button
               onClick={() => setFilterType("expense")}
               className={`px-3 py-1.5 rounded-lg transition ${filterType === "expense"
-                  ? "bg-white text-rose-500 shadow-xs dark:bg-gray-700 dark:text-rose-400"
-                  : "text-gray-500"
+                ? "bg-white text-rose-500 shadow-xs dark:bg-gray-700 dark:text-rose-400"
+                : "text-gray-500"
                 }`}
             >
               Pengeluaran
@@ -357,8 +357,8 @@ function FinanceContent() {
                     <td className="p-3">
                       <span
                         className={`px-2.5 py-1 rounded-full text-xs font-medium ${flow.type === "income"
-                            ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-500"
-                            : "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-500"
+                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-500"
+                          : "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-500"
                           }`}
                       >
                         {flow.type === "income" ? "INCOME" : "EXPENSE"}
@@ -368,8 +368,8 @@ function FinanceContent() {
                     <td className="p-3 text-gray-600 dark:text-gray-400">{flow.description}</td>
                     <td
                       className={`p-3 text-right font-bold ${flow.type === "income"
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-rose-500"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-500"
                         }`}
                     >
                       {flow.type === "income" ? `+ ${flow.amount}` : `- ${flow.amount}`}

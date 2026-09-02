@@ -11,11 +11,25 @@ export default function Home() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [finances, setFinances] = useState<any[]>([]);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch Data Real-time dari Supabase
   const fetchDashboardData = async () => {
     setLoading(true);
+
+    // Ambil Session & Role User Login
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+      if (profile?.role) {
+        setUserRole(String(profile.role).toLowerCase().trim());
+      }
+    }
 
     const [ordersRes, inventoryRes, financesRes] = await Promise.all([
       supabase.from("orders").select("*").order("created_at", { ascending: false }),
@@ -34,9 +48,11 @@ export default function Home() {
     fetchDashboardData();
   }, []);
 
-  // 1. Kalkulasi 4 Stat Cards
-  const stats = useMemo(() => {
-    // Total Revenue (Dari DP + Pelunasan Pesanan + Pemasukan Kas Manual)
+  const normalizedRole = (userRole || "").toLowerCase().trim();
+  const isOwnerOrBendahara = normalizedRole === "owner" || normalizedRole === "bendahara";
+
+  // 1. Kalkulasi Statistik Keuangan (Untuk Owner & Bendahara)
+  const financeStats = useMemo(() => {
     const orderRevenue = orders.reduce(
       (acc, curr) => acc + Number(curr.dp_amount || 0) + Number(curr.repayment_amount || 0),
       0
@@ -49,7 +65,6 @@ export default function Home() {
 
     const totalRevenue = orderRevenue + financeIncome;
 
-    // Total Expense (Dari Catatan Kas Pengeluaran)
     const totalExpense = finances.reduce(
       (acc, curr) => acc + Number(curr.expense || 0),
       0
@@ -66,10 +81,25 @@ export default function Home() {
     };
   }, [orders, finances]);
 
-  // 2. Transaksi Pesanan Terakhir (5 Data Terbaru)
-  const recentOrders = useMemo(() => orders.slice(0, 5), [orders]);
+  // 2. Kalkulasi Statistik Pengerjaan (Untuk Role Staff / Designer)
+  const staffStats = useMemo(() => {
+    const totalOrders = orders.length;
+    const paidOffOrders = orders.filter((o) => o.is_paid_off || Number(o.remaining_payment || 0) <= 0).length;
+    const unpaidOrders = totalOrders - paidOffOrders;
+    const inProgressOrders = orders.filter((o) => o.status === "Proses Design" || o.status === "Pengerjaan").length;
 
-  // 3. Kalkulasi Stok Menipis (Agregasi Nama Barang dari Inventory, Batas <= 5)
+    return {
+      totalOrders,
+      paidOffOrders,
+      unpaidOrders,
+      inProgressOrders,
+    };
+  }, [orders]);
+
+  // 3. Transaksi Pesanan Terakhir (Maksimal 15 Data Terbaru)
+  const recentOrders = useMemo(() => orders.slice(0, 15), [orders]);
+
+  // 4. Kalkulasi Stok Menipis (Maksimal 10 Barang, Batas Min <= 5)
   const lowStockItems = useMemo(() => {
     const summaryMap: Record<string, { category: string; remaining: number }> = {};
 
@@ -89,7 +119,8 @@ export default function Home() {
         category: data.category,
         stock: data.remaining,
       }))
-      .filter((item) => item.stock <= 5);
+      .filter((item) => item.stock <= 5)
+      .slice(0, 10); // Batasi maksimal 10 barang
   }, [inventoryItems]);
 
   const getStatusBadge = (status: OrderStatus) => {
@@ -111,55 +142,99 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
-      {/* 1. 4 STAT CARDS KUSTOM SESUAI SPESIFIKASI */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {/* Total Revenue */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Revenue (Pemasukan)</span>
-          <h4 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">
-            {loading ? "..." : `Rp ${stats.revenue.toLocaleString("id-ID")}`}
-          </h4>
-          <span className="text-xs font-medium text-emerald-500 mt-1 inline-block">Real-time DB</span>
-        </div>
+      {/* 1. STAT CARDS DAN GRAFIK BERDASARKAN ROLE */}
+      {isOwnerOrBendahara ? (
+        <>
+          {/* STAT CARDS UNTUK OWNER & BENDAHARA */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {/* Total Revenue */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Revenue (Pemasukan)</span>
+              <h4 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">
+                {loading ? "..." : `Rp ${financeStats.revenue.toLocaleString("id-ID")}`}
+              </h4>
+              <span className="text-xs font-medium text-emerald-500 mt-1 inline-block">Real-time DB</span>
+            </div>
 
-        {/* Total Expense */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Expense (Pengeluaran)</span>
-          <h4 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">
-            {loading ? "..." : `Rp ${stats.expense.toLocaleString("id-ID")}`}
-          </h4>
-          <span className="text-xs font-medium text-rose-500 mt-1 inline-block">Dari Mutasi Kas</span>
-        </div>
+            {/* Total Expense */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Expense (Pengeluaran)</span>
+              <h4 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">
+                {loading ? "..." : `Rp ${financeStats.expense.toLocaleString("id-ID")}`}
+              </h4>
+              <span className="text-xs font-medium text-rose-500 mt-1 inline-block">Dari Mutasi Kas</span>
+            </div>
 
-        {/* Net Profit */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Net Profit (Keuntungan)</span>
-          <h4 className={`text-2xl font-bold mt-2 ${stats.netProfit < 0 ? "text-rose-500" : "text-emerald-600 dark:text-emerald-400"}`}>
-            {loading ? "..." : `Rp ${stats.netProfit.toLocaleString("id-ID")}`}
-          </h4>
-          <span className="text-xs text-gray-400 mt-1 inline-block">Estimasi Bersih</span>
-        </div>
+            {/* Net Profit */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Net Profit (Keuntungan)</span>
+              <h4 className={`text-2xl font-bold mt-2 ${financeStats.netProfit < 0 ? "text-rose-500" : "text-emerald-600 dark:text-emerald-400"}`}>
+                {loading ? "..." : `Rp ${financeStats.netProfit.toLocaleString("id-ID")}`}
+              </h4>
+              <span className="text-xs text-gray-400 mt-1 inline-block">Estimasi Bersih</span>
+            </div>
 
-        {/* Total Orders */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Orders</span>
-          <h4 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">
-            {loading ? "..." : `${stats.totalOrders} Transaksi`}
-          </h4>
-          <span className="text-xs font-medium text-brand-500 mt-1 inline-block">Tercatat di Sistem</span>
-        </div>
-      </div>
+            {/* Total Orders */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Orders</span>
+              <h4 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">
+                {loading ? "..." : `${financeStats.totalOrders} Transaksi`}
+              </h4>
+              <span className="text-xs font-medium text-brand-500 mt-1 inline-block">Tercatat di Sistem</span>
+            </div>
+          </div>
 
-      {/* 2. GRAFIK PEMASUKAN VS PENGELUARAN */}
+          {/* GRAFIK STATISTIK HANYA TAMPIL DI OWNER & BENDAHARA */}
+          <div className="grid grid-cols-12 gap-4 md:gap-6">
+            <div className="col-span-12">
+              <StatisticsChart />
+            </div>
+          </div>
+        </>
+      ) : (
+        /* STAT CARDS KHUSUS UNTUK ROLE STAFF / DESIGNER */
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {/* Total Pesanan */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Pesanan</span>
+            <h4 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">
+              {loading ? "..." : `${staffStats.totalOrders} Pesanan`}
+            </h4>
+            <span className="text-xs font-medium text-brand-500 mt-1 inline-block">Seluruh Pesanan</span>
+          </div>
+
+          {/* Lunas */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Lunas (Paid Off)</span>
+            <h4 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">
+              {loading ? "..." : `${staffStats.paidOffOrders} Pesanan`}
+            </h4>
+            <span className="text-xs font-medium text-emerald-500 mt-1 inline-block">Siap Kirim / Selesai</span>
+          </div>
+
+          {/* Belum Lunas / DP */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Belum Lunas / DP</span>
+            <h4 className="text-2xl font-bold text-rose-500 mt-2">
+              {loading ? "..." : `${staffStats.unpaidOrders} Pesanan`}
+            </h4>
+            <span className="text-xs font-medium text-rose-500 mt-1 inline-block">Menunggu Pelunasan</span>
+          </div>
+
+          {/* Proses / Pengerjaan */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Proses / Pengerjaan</span>
+            <h4 className="text-2xl font-bold text-amber-500 mt-2">
+              {loading ? "..." : `${staffStats.inProgressOrders} Pesanan`}
+            </h4>
+            <span className="text-xs font-medium text-amber-500 mt-1 inline-block">Perlu Dikerjakan</span>
+          </div>
+        </div>
+      )}
+
+      {/* 2. TABEL PESANAN TERAKHIR (MAX 15) & STOK MENIPIS (MAX 10) */}
       <div className="grid grid-cols-12 gap-4 md:gap-6">
-        <div className="col-span-12">
-          <StatisticsChart />
-        </div>
-      </div>
-
-      {/* 3. TABEL PESANAN TERAKHIR & STOK MENIPIS */}
-      <div className="grid grid-cols-12 gap-4 md:gap-6">
-        {/* Recent Orders */}
+        {/* Recent Orders (Max 15 Data) */}
         <div className="col-span-12 xl:col-span-8 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white">Pesanan Terakhir (Recent Orders)</h3>
@@ -175,18 +250,22 @@ export default function Home() {
                   <th className="p-3">Pelanggan</th>
                   <th className="p-3">No. Telp</th>
                   <th className="p-3">Produk</th>
-                  <th className="p-3">Total</th>
+                  {isOwnerOrBendahara && <th className="p-3">Total</th>}
                   <th className="p-3">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="p-4 text-center text-gray-400">Memuat pesanan...</td>
+                    <td colSpan={isOwnerOrBendahara ? 6 : 5} className="p-4 text-center text-gray-400">
+                      Memuat pesanan...
+                    </td>
                   </tr>
                 ) : recentOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-4 text-center text-gray-400">Belum ada pesanan.</td>
+                    <td colSpan={isOwnerOrBendahara ? 6 : 5} className="p-4 text-center text-gray-400">
+                      Belum ada pesanan.
+                    </td>
                   </tr>
                 ) : (
                   recentOrders.map((order) => (
@@ -195,9 +274,11 @@ export default function Home() {
                       <td className="p-3 text-gray-700 dark:text-gray-300">{order.customer_name}</td>
                       <td className="p-3 text-gray-500">{order.phone_number}</td>
                       <td className="p-3 text-gray-700 dark:text-gray-300">{order.product_name}</td>
-                      <td className="p-3 font-semibold text-gray-800 dark:text-white">
-                        Rp {order.total_price.toLocaleString("id-ID")}
-                      </td>
+                      {isOwnerOrBendahara && (
+                        <td className="p-3 font-semibold text-gray-800 dark:text-white">
+                          Rp {order.total_price.toLocaleString("id-ID")}
+                        </td>
+                      )}
                       <td className="p-3">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadge(order.status)}`}>
                           {order.status}
@@ -211,11 +292,11 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Low Stock */}
+        {/* Low Stock (Max 10 Data) */}
         <div className="col-span-12 xl:col-span-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white">Peringatan Stok Menipis</h3>
-            <Link href="/stock" className="text-xs text-brand-500 hover:underline">Kelola Stok</Link>
+            <Link href="/stock" className="text-sm text-brand-500 hover:underline">Kelola Stok</Link>
           </div>
           <div className="space-y-4">
             {loading ? (
