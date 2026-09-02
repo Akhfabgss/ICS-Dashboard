@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Order } from "@/types/order";
+import { UserProfile } from "@/types/users";
 import Swal from "sweetalert2";
 import { ArrowLeft, Trash2, Edit } from "lucide-react";
 import Link from "next/link";
@@ -15,8 +16,9 @@ export default function OrderDetailPage() {
 
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [staffList, setStaffList] = useState<UserProfile[]>([]);
 
-    // Fetch Detail Order dari Supabase
     const fetchOrderDetail = async () => {
         setLoading(true);
         const { data, error } = await supabase
@@ -35,15 +37,40 @@ export default function OrderDetailPage() {
     };
 
     useEffect(() => {
-        if (orderId) {
-            fetchOrderDetail();
-        }
+        const init = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("role")
+                    .eq("id", session.user.id)
+                    .single();
+                if (profile?.role) {
+                    setUserRole(String(profile.role).toLowerCase().trim());
+                }
+            }
+            const { data: staff } = await supabase
+                .from("profiles")
+                .select("id, full_name, email, role")
+                .order("full_name");
+            if (staff) setStaffList(staff as UserProfile[]);
+        };
+        init();
+        if (orderId) fetchOrderDetail();
     }, [orderId]);
 
-    // Handle Hapus Pesanan
+    // Kebal terhadap huruf besar/kecil & spasi
+    const normalizedRole = (userRole || "").toLowerCase().trim();
+    const isFinanceVisible = normalizedRole !== "staff" && normalizedRole !== "designer" && normalizedRole !== "";
+
+    const getAssigneeName = (assignedTo?: string | null) => {
+        if (!assignedTo) return "Belum Ditugaskan";
+        const staff = staffList.find((s) => s.id === assignedTo || s.full_name === assignedTo);
+        return staff?.full_name ?? assignedTo;
+    };
+
     const handleDelete = async () => {
         if (!order) return;
-
         const result = await Swal.fire({
             title: "Konfirmasi Hapus",
             text: `Yakin ingin menghapus order ${order.order_number}?`,
@@ -54,10 +81,8 @@ export default function OrderDetailPage() {
             confirmButtonText: "Ya, Hapus!",
             cancelButtonText: "Batal",
         });
-
         if (result.isConfirmed) {
             const { error } = await supabase.from("orders").delete().eq("id", order.id);
-
             if (error) {
                 Swal.fire("Error!", "Gagal menghapus: " + error.message, "error");
             } else {
@@ -68,11 +93,7 @@ export default function OrderDetailPage() {
     };
 
     if (loading) {
-        return (
-            <div className="p-6 text-center text-gray-500">
-                Memuat detail pesanan...
-            </div>
-        );
+        return <div className="p-6 text-center text-gray-500">Memuat detail pesanan...</div>;
     }
 
     if (!order) return null;
@@ -98,8 +119,6 @@ export default function OrderDetailPage() {
                         </p>
                     </div>
                 </div>
-
-                {/* AKSI EDIT & HAPUS */}
                 <div className="flex gap-2">
                     <Link
                         href={`/orders/edit/${order.id}`}
@@ -121,9 +140,7 @@ export default function OrderDetailPage() {
 
             {/* 1. INFORMASI PEMESAN */}
             <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                <h3 className="font-bold text-gray-800 dark:text-white text-base">
-                    1. Data Pemesan
-                </h3>
+                <h3 className="font-bold text-gray-800 dark:text-white text-base">1. Data Pemesan</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div>
                         <span className="text-sm text-gray-400 font-medium block">Nama Pemesan</span>
@@ -132,6 +149,10 @@ export default function OrderDetailPage() {
                     <div>
                         <span className="text-sm text-gray-400 font-medium block">No. WhatsApp / HP</span>
                         <p className="font-semibold text-gray-800 dark:text-white">{order.phone_number}</p>
+                    </div>
+                    <div>
+                        <span className="text-sm text-gray-400 font-medium block">Dikerjakan Oleh</span>
+                        <p className="font-semibold text-gray-800 dark:text-white">{getAssigneeName(order.assigned_to)}</p>
                     </div>
                     <div className="sm:col-span-2">
                         <span className="text-sm text-gray-400 font-medium block">Alamat Pengiriman</span>
@@ -142,9 +163,7 @@ export default function OrderDetailPage() {
 
             {/* 2. PRODUK & ADD-ONS */}
             <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                <h3 className="font-bold text-gray-800 dark:text-white text-base">
-                    2. Rincian Item Pesanan
-                </h3>
+                <h3 className="font-bold text-gray-800 dark:text-white text-base">2. Rincian Item Pesanan</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                     <div>
                         <span className="text-sm text-gray-400 block">Kategori Desain</span>
@@ -159,16 +178,12 @@ export default function OrderDetailPage() {
                         <p className="font-medium text-gray-800 dark:text-white">{order.order_source}</p>
                     </div>
                 </div>
-
                 <div>
                     <span className="text-sm text-gray-400 block mb-2">Tambahan / Add-ons</span>
                     <div className="flex flex-wrap gap-2">
                         {order.add_ons && order.add_ons.length > 0 ? (
                             order.add_ons.map((addon, idx) => (
-                                <span
-                                    key={idx}
-                                    className="px-3 py-1 text-sm font-semibold rounded-full bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
-                                >
+                                <span key={idx} className="px-3 py-1 text-sm font-semibold rounded-full bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
                                     {addon}
                                 </span>
                             ))
@@ -179,73 +194,62 @@ export default function OrderDetailPage() {
                 </div>
             </div>
 
-            {/* 3. RINCIAN KEUANGAN */}
-            <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-xs">
-                <h3 className="font-bold text-gray-800 dark:text-white text-base mb-2">
-                    3. Ringkasan Pembayaran
-                </h3>
-
-                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                    <span>Harga Frame:</span>
-                    <span>Rp {Number(order.frame_price || 0).toLocaleString("id-ID")}</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                    <span>Harga Tambahan (Add-ons):</span>
-                    <span>Rp {Number(order.addons_price || 0).toLocaleString("id-ID")}</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                    <span>Ongkir:</span>
-                    <span>Rp {Number(order.shipping_fee || 0).toLocaleString("id-ID")}</span>
-                </div>
-                {Number(order.discount_amount || 0) > 0 && (
-                    <div className="flex justify-between text-sm text-rose-500 font-medium">
-                        <span>Diskon:</span>
-                        <span>- Rp {Number(order.discount_amount).toLocaleString("id-ID")}</span>
+            {/* 3. RINCIAN KEUANGAN — hanya untuk Owner/Bendahara */}
+            {isFinanceVisible && (
+                <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-xs">
+                    <h3 className="font-bold text-gray-800 dark:text-white text-base mb-2">3. Ringkasan Pembayaran</h3>
+                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                        <span>Harga Frame:</span>
+                        <span>Rp {Number(order.frame_price || 0).toLocaleString("id-ID")}</span>
                     </div>
-                )}
-
-                <div className="flex justify-between text-base font-bold border-t dark:border-gray-800 pt-2 text-gray-800 dark:text-white">
-                    <span>Total Harga:</span>
-                    <span>Rp {Number(order.total_price || 0).toLocaleString("id-ID")}</span>
+                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                        <span>Harga Tambahan (Add-ons):</span>
+                        <span>Rp {Number(order.addons_price || 0).toLocaleString("id-ID")}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                        <span>Ongkir:</span>
+                        <span>Rp {Number(order.shipping_fee || 0).toLocaleString("id-ID")}</span>
+                    </div>
+                    {Number(order.discount_percent || 0) > 0 && (
+                        <div className="flex justify-between text-sm text-rose-500 font-medium">
+                            <span>Diskon ({order.discount_percent}%):</span>
+                            <span>- Rp {Number(order.discount_amount || 0).toLocaleString("id-ID")}</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between text-base font-bold border-t dark:border-gray-800 pt-2 text-gray-800 dark:text-white">
+                        <span>Total Harga:</span>
+                        <span>Rp {Number(order.total_price || 0).toLocaleString("id-ID")}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                        <span>DP / Pelunasan Terbayar:</span>
+                        <span>Rp {(Number(order.dp_amount || 0) + Number(order.repayment_amount || 0)).toLocaleString("id-ID")}</span>
+                    </div>
+                    <div className="flex justify-between text-base font-bold border-t dark:border-gray-800 pt-2">
+                        <span className="dark:text-white">Sisa Tagihan:</span>
+                        <span className={order.remaining_payment <= 0 ? "text-emerald-500" : "text-rose-500"}>
+                            Rp {Number(order.remaining_payment || 0).toLocaleString("id-ID")} ({order.is_paid_off ? "LUNAS" : "BELUM LUNAS"})
+                        </span>
+                    </div>
                 </div>
-                <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                    <span>DP / Pelunasan Terbayar:</span>
-                    <span>Rp {(Number(order.dp_amount || 0) + Number(order.repayment_amount || 0)).toLocaleString("id-ID")}</span>
-                </div>
-                <div className="flex justify-between text-base font-bold border-t dark:border-gray-800 pt-2">
-                    <span className="dark:text-white">Sisa Tagihan:</span>
-                    <span className={order.remaining_payment <= 0 ? "text-emerald-500" : "text-rose-500"}>
-                        Rp {Number(order.remaining_payment || 0).toLocaleString("id-ID")} ({order.is_paid_off ? "LUNAS" : "BELUM LUNAS"})
-                    </span>
-                </div>
-            </div>
+            )}
 
             {/* 4. ISIAN DATA DESAIN */}
             <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
                 <h3 className="font-bold text-gray-800 dark:text-white text-base">
-                    4. Data Isian Desain
+                    {isFinanceVisible ? "4." : "3."} Data Isian Desain
                 </h3>
-
                 <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
                     {(() => {
                         if (!order.design_data) return <p className="text-sm text-gray-400 italic">Belum ada data isian.</p>;
-
                         try {
                             const parsed = JSON.parse(order.design_data);
                             if (Array.isArray(parsed)) {
                                 const filled = parsed.filter((item) => item.value && item.value.trim() !== "");
-
-                                if (filled.length === 0) {
-                                    return <p className="text-sm text-gray-400 italic">Belum ada data desain yang diisi.</p>;
-                                }
-
+                                if (filled.length === 0) return <p className="text-sm text-gray-400 italic">Belum ada data desain yang diisi.</p>;
                                 return (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                                         {filled.map((field, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="flex flex-col p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200/60 dark:border-gray-700/60"
-                                            >
+                                            <div key={idx} className="flex flex-col p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
                                                 <span className="text-[10px] uppercase font-bold text-gray-400">{field.key || "Custom"}</span>
                                                 <span className="font-semibold text-gray-800 dark:text-gray-200 mt-0.5 break-words">{field.value}</span>
                                             </div>

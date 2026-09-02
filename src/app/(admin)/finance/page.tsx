@@ -15,12 +15,13 @@ interface CashFlowItem {
   description: string;
   amount: string;
   rawAmount: number;
-  isManual: boolean; // Flag untuk membedakan transaksi manual vs order
+  isManual: boolean; // Flag untuk membedakan transaksi manual vs order/reseller
+  sourceType?: "Order" | "Reseller" | "Manual";
 }
 
 export default function FinancePage() {
   return (
-    <RoleGuard allowedRoles={["Owner", "Bendahara"]}>
+    <RoleGuard allowedRoles={["Owner", "Bendahara", "owner", "bendahara"]}>
       <FinanceContent />
     </RoleGuard>
   );
@@ -53,10 +54,10 @@ function FinanceContent() {
       .from("orders")
       .select("id, order_number, customer_name, dp_amount, repayment_amount, created_at");
 
-    // 2. Fetch Data Manual dari Tabel Finances
+    // 2. Fetch Data dari Tabel Finances
     const { data: financesData } = await supabase
       .from("finances")
-      .select("id, title, income, expense, notes, created_at");
+      .select("id, title, income, expense, notes, created_at, reseller_id");
 
     const flowList: CashFlowItem[] = [];
 
@@ -79,16 +80,31 @@ function FinanceContent() {
             amount: `Rp ${totalPaid.toLocaleString("id-ID")}`,
             rawAmount: totalPaid,
             isManual: false,
+            sourceType: "Order",
           });
         }
       });
     }
 
-    // Transform Data Finances ke Pengeluaran (Expense) atau Pemasukan Lain
+    // Transform Data Finances
     if (financesData) {
       financesData.forEach((fin, idx) => {
         const isIncome = Number(fin.income) > 0;
         const amountVal = isIncome ? Number(fin.income) : Number(fin.expense);
+
+        // Pengecekan apakah transaksi ini berasal dari Komisi Reseller
+        const isReseller =
+          Boolean(fin.reseller_id) ||
+          (fin.notes && fin.notes.includes("[OTOMATIS_RESELLER]")) ||
+          (fin.title && fin.title.startsWith("Komisi Reseller"));
+
+        let finalCategory = fin.title;
+        let cleanDescription = fin.notes || "-";
+
+        if (isReseller) {
+          finalCategory = "Komisi Reseller";
+          cleanDescription = (fin.notes || "").replace(/\[OTOMATIS_[A-Z_]+\]\s*/g, "");
+        }
 
         flowList.push({
           id: `CF-${String(idx + 1).padStart(3, "0")}`,
@@ -100,11 +116,12 @@ function FinanceContent() {
           }),
           rawDate: new Date(fin.created_at),
           type: isIncome ? "income" : "expense",
-          category: fin.title,
-          description: fin.notes || "-",
+          category: finalCategory,
+          description: cleanDescription,
           amount: `Rp ${amountVal.toLocaleString("id-ID")}`,
           rawAmount: amountVal,
-          isManual: true,
+          isManual: !isReseller,
+          sourceType: isReseller ? "Reseller" : "Manual",
         });
       });
     }
@@ -151,7 +168,7 @@ function FinanceContent() {
       confirmButtonColor: "#d33",
       cancelButtonColor: "#3085d6",
       confirmButtonText: "Ya, Hapus!",
-      cancelButtonText: "Batal"
+      cancelButtonText: "Batal",
     });
 
     if (!result.isConfirmed) return;
@@ -278,8 +295,8 @@ function FinanceContent() {
             <button
               onClick={() => setFilterType("all")}
               className={`px-3 py-1.5 rounded-lg transition ${filterType === "all"
-                ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white"
-                : "text-gray-500"
+                  ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white"
+                  : "text-gray-500"
                 }`}
             >
               Semua
@@ -287,8 +304,8 @@ function FinanceContent() {
             <button
               onClick={() => setFilterType("income")}
               className={`px-3 py-1.5 rounded-lg transition ${filterType === "income"
-                ? "bg-white text-emerald-600 shadow-xs dark:bg-gray-700 dark:text-emerald-400"
-                : "text-gray-500"
+                  ? "bg-white text-emerald-600 shadow-xs dark:bg-gray-700 dark:text-emerald-400"
+                  : "text-gray-500"
                 }`}
             >
               Pemasukan
@@ -296,8 +313,8 @@ function FinanceContent() {
             <button
               onClick={() => setFilterType("expense")}
               className={`px-3 py-1.5 rounded-lg transition ${filterType === "expense"
-                ? "bg-white text-rose-500 shadow-xs dark:bg-gray-700 dark:text-rose-400"
-                : "text-gray-500"
+                  ? "bg-white text-rose-500 shadow-xs dark:bg-gray-700 dark:text-rose-400"
+                  : "text-gray-500"
                 }`}
             >
               Pengeluaran
@@ -340,26 +357,26 @@ function FinanceContent() {
                     <td className="p-3">
                       <span
                         className={`px-2.5 py-1 rounded-full text-xs font-medium ${flow.type === "income"
-                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-500"
-                          : "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-500"
+                            ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-500"
+                            : "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-500"
                           }`}
                       >
                         {flow.type === "income" ? "INCOME" : "EXPENSE"}
                       </span>
                     </td>
-                    <td className="p-3 text-gray-700 dark:text-gray-300">{flow.category}</td>
+                    <td className="p-3 text-gray-700 dark:text-gray-300 font-medium">{flow.category}</td>
                     <td className="p-3 text-gray-600 dark:text-gray-400">{flow.description}</td>
                     <td
                       className={`p-3 text-right font-bold ${flow.type === "income"
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-rose-500"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-rose-500"
                         }`}
                     >
                       {flow.type === "income" ? `+ ${flow.amount}` : `- ${flow.amount}`}
                     </td>
                     <td className="p-3 text-center">
                       {flow.isManual ? (
-                        <div className="flex items-center justify-center gap-3">
+                        <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => handleOpenEdit(flow)}
                             className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
@@ -374,7 +391,9 @@ function FinanceContent() {
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs text-gray-400 italic">Otomatis (Order)</span>
+                        <span className="text-xs text-gray-400 italic font-medium">
+                          {flow.sourceType === "Reseller" ? "Otomatis (Reseller)" : "Otomatis (Order)"}
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -443,7 +462,7 @@ function FinanceContent() {
                 <input
                   type="text"
                   placeholder="500000"
-                  value={expenseAmount ? Number(expenseAmount).toLocaleString('id-ID') : ""}
+                  value={expenseAmount ? Number(expenseAmount).toLocaleString("id-ID") : ""}
                   onChange={(e) => {
                     const rawValue = e.target.value.replace(/\D/g, "");
                     setExpenseAmount(rawValue);

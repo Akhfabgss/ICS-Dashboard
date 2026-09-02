@@ -1,9 +1,6 @@
 export type OrderStatus = 'Proses Design' | 'Pengerjaan' | 'Pengiriman' | 'Selesai' | 'Trouble';
 
 export interface Order {
-  discount_amount(discount_amount: number): unknown;
-  discount_amount: number;
-  shipping_fee: number;
   id: string;
   order_number: string;
   order_date: string;
@@ -16,6 +13,9 @@ export interface Order {
   add_ons: string[];
   frame_price: number;
   addons_price: number;
+  shipping_fee: number;
+  discount_percent: number;
+  discount_amount: number;
   total_price: number;
   dp_amount: number;
   repayment_amount: number;
@@ -27,5 +27,6 @@ export interface Order {
   status: OrderStatus;
   design_time?: string;
   assembly_time?: string;
+  assigned_to?: string | null;
   created_at: string;
 }

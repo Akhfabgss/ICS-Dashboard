@@ -18,6 +18,7 @@ import {
   Wallet,
   User,
   Layers,
+  Handshake,
 } from "lucide-react";
 
 type NavItem = {
@@ -34,16 +35,6 @@ const navItems: NavItem[] = [
     path: "/",
   },
   {
-    icon: <Layers />,
-    name: "Stock",
-    path: "/stock",
-  },
-  {
-    icon: <BoxIcon />,
-    name: "Produk",
-    path: "/products",
-  },
-  {
     icon: <ShoppingCart />,
     name: "Pemesanan",
     path: "/orders",
@@ -57,6 +48,21 @@ const navItems: NavItem[] = [
     icon: <Wallet />,
     name: "Keuangan (Kas)",
     path: "/finance",
+  },
+  {
+    icon: <Layers />,
+    name: "Stock",
+    path: "/stock",
+  },
+  {
+    icon: <BoxIcon />,
+    name: "Produk",
+    path: "/products",
+  },
+  {
+    icon: <Handshake />,
+    name: "Reseller",
+    path: "/resellers",
   },
   {
     icon: <User />,
@@ -118,6 +124,16 @@ const AppSidebar: React.FC = () => {
 
     // Menu Pegawai: HANYA untuk Owner
     if (item.path === "/pegawai") {
+      return role === "Owner";
+    }
+
+    // Menu Produk: HANYA untuk Owner
+    if (item.path === "/products") {
+      return role === "Owner";
+    }
+
+    // Menu Reseller: HANYA untuk Owner
+    if (item.path === "/resellers") {
       return role === "Owner";
     }
 
