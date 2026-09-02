@@ -96,8 +96,8 @@ export default function InvoicesPage() {
               type="button"
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-black dark:text-white font-bold text-xs shadow-md transition-all cursor-pointer border border-purple-700 dark:border-purple-500"
             >
-              <Printer className="w-4 h-4 text-gray-500 dark:text-white" />
-              <span className="text-gray-500 dark:text-white">
+              <Printer className="w-4 h-4 dark:text-white" />
+              <span className=" dark:text-white">
                 Cetak Gabungan ({selectedOrderIds.length} Order)
               </span>
             </button>
@@ -108,7 +108,7 @@ export default function InvoicesPage() {
             placeholder="Cari No. Order / Nama Customer..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-xs outline-none focus:border-brand-500"
+            className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-xs outline-none focus:border-brand-500 dark:text-white"
           />
         </div>
       </div>
