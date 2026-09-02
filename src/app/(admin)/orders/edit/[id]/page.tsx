@@ -53,9 +53,13 @@ export default function EditOrderPage() {
     const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
     const [assignedTo, setAssignedTo] = useState("");
 
+    // Custom Add-on State untuk Tambah Foto
+    const [isExtraPhotoChecked, setIsExtraPhotoChecked] = useState(false);
+    const [extraPhotoCount, setExtraPhotoCount] = useState<number>(1);
+
     const [framePrice, setFramePrice] = useState<number>(0);
     const [shippingFee, setShippingFee] = useState<number>(0);
-    const [discountPercent, setDiscountPercent] = useState<number>(0);
+    const [discountAmount, setDiscountAmount] = useState<number>(0); // Nominal Rupiah (Rp)
     const [dpAmount, setDpAmount] = useState<number>(0);
     const [repaymentAmount, setRepaymentAmount] = useState<number>(0);
 
@@ -67,7 +71,7 @@ export default function EditOrderPage() {
         const fetchData = async () => {
             setLoading(true);
 
-            // Ambil role user login
+            // Ambil role user login & normalisasi
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
                 const { data: profile } = await supabase
@@ -88,7 +92,15 @@ export default function EditOrderPage() {
 
             if (prodRes.data) setProductList(prodRes.data);
             if (addRes.data) setAddonList(addRes.data);
-            if (staffRes.data) setStaffList(staffRes.data as UserProfile[]);
+
+            // Filter daftar staf hanya untuk role staff / designer
+            if (staffRes.data) {
+                const onlyStaff = (staffRes.data as UserProfile[]).filter((s) => {
+                    const r = String(s.role || "").toLowerCase().trim();
+                    return r === "staff" || r === "designer";
+                });
+                setStaffList(onlyStaff);
+            }
 
             if (orderRes.data) {
                 const o = orderRes.data;
@@ -99,15 +111,36 @@ export default function EditOrderPage() {
                 setCategory(o.category || "PENDAKIAN");
                 setProductName(o.product_name || "");
                 setOrderSource(o.order_source || "WhatsApp");
-                setSelectedAddons(o.add_ons || []);
                 setAssignedTo(o.assigned_to || "");
                 setFramePrice(Number(o.frame_price || 0));
                 setShippingFee(Number(o.shipping_fee || 0));
-                setDiscountPercent(Number(o.discount_percent || 0));
+                setDiscountAmount(Number(o.discount_amount || 0));
                 setDpAmount(Number(o.dp_amount || 0));
                 setRepaymentAmount(Number(o.repayment_amount || 0));
                 setShippingMethod(o.shipping_method || "JNE");
                 setNotes(o.notes || "");
+
+                // Parsing Add-ons & Deteksi Tambah Foto
+                const rawAddons: string[] = o.add_ons || [];
+                const normalAddons: string[] = [];
+                let photoFound = false;
+
+                rawAddons.forEach((addonStr) => {
+                    if (addonStr.toLowerCase().includes("tambah foto")) {
+                        photoFound = true;
+                        const match = addonStr.match(/\((\d+)\s*Foto\)/i);
+                        if (match && match[1]) {
+                            setExtraPhotoCount(parseInt(match[1], 10));
+                        } else {
+                            setExtraPhotoCount(1);
+                        }
+                    } else {
+                        normalAddons.push(addonStr);
+                    }
+                });
+
+                setIsExtraPhotoChecked(photoFound);
+                setSelectedAddons(normalAddons);
 
                 if (o.design_data) {
                     try {
@@ -138,19 +171,28 @@ export default function EditOrderPage() {
     };
 
     const toggleAddon = (addonName: string) => {
+        if (addonName.toLowerCase().includes("foto")) {
+            setIsExtraPhotoChecked(!isExtraPhotoChecked);
+            return;
+        }
+
         setSelectedAddons((prev) =>
             prev.includes(addonName) ? prev.filter((a) => a !== addonName) : [...prev, addonName]
         );
     };
 
-    const addonsPrice = selectedAddons.reduce((acc, name) => {
+    // Perhitungan Total Harga Add-ons
+    const standardAddonsPrice = selectedAddons.reduce((acc, name) => {
         const item = addonList.find((a) => a.name === name);
         return acc + (item ? Number(item.price) : 0);
     }, 0);
 
+    const extraPhotoPrice = isExtraPhotoChecked ? extraPhotoCount * 5000 : 0;
+    const addonsPrice = standardAddonsPrice + extraPhotoPrice;
+
+    // Kalkulasi Keuangan dengan Diskon Rupiah
     const subtotal = framePrice + addonsPrice + shippingFee;
-    const discountAmount = Math.round(subtotal * (discountPercent / 100));
-    const totalPrice = subtotal - discountAmount;
+    const totalPrice = Math.max(0, subtotal - discountAmount);
     const remainingPayment = totalPrice - (dpAmount + repaymentAmount);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -170,6 +212,11 @@ export default function EditOrderPage() {
 
         setSubmitting(true);
 
+        const finalAddons = [...selectedAddons];
+        if (isExtraPhotoChecked) {
+            finalAddons.push(`Tambah foto (${extraPhotoCount} Foto)`);
+        }
+
         const basePayload: Record<string, unknown> = {
             customer_name: customerName.trim(),
             phone_number: phoneNumber.trim(),
@@ -177,7 +224,7 @@ export default function EditOrderPage() {
             category,
             product_name: productName,
             order_source: orderSource,
-            add_ons: selectedAddons,
+            add_ons: finalAddons,
             assigned_to: assignedTo || null,
             design_data: JSON.stringify(designFields),
             shipping_method: shippingMethod,
@@ -188,7 +235,6 @@ export default function EditOrderPage() {
             basePayload.frame_price = framePrice;
             basePayload.addons_price = addonsPrice;
             basePayload.shipping_fee = shippingFee;
-            basePayload.discount_percent = discountPercent;
             basePayload.discount_amount = discountAmount;
             basePayload.dp_amount = dpAmount;
             basePayload.repayment_amount = repaymentAmount;
@@ -299,22 +345,58 @@ export default function EditOrderPage() {
                     </div>
                     <div>
                         <label className="block font-medium mb-2 text-sm">Pilih Tambahan / Add-ons</label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {addonList.map((item) => (
-                                <label key={item.id}
-                                    className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-sm transition-colors ${selectedAddons.includes(item.name) ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium" : "border-gray-200 dark:border-gray-800"}`}>
-                                    <input type="checkbox" checked={selectedAddons.includes(item.name)} onChange={() => toggleAddon(item.name)}
-                                        className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4" />
-                                    <span>
-                                        {item.name} {isFinanceVisible ? `(+Rp ${item.price.toLocaleString("id-ID")})` : ""}
-                                    </span>
-                                </label>
-                            ))}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {addonList.map((item) => {
+                                const isPhotoAddon = item.name.toLowerCase().includes("foto");
+
+                                if (isPhotoAddon) {
+                                    return (
+                                        <div key={item.id} className={`p-3 rounded-xl border transition-colors ${isExtraPhotoChecked ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10" : "border-gray-200 dark:border-gray-800"}`}>
+                                            <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isExtraPhotoChecked}
+                                                    onChange={() => setIsExtraPhotoChecked(!isExtraPhotoChecked)}
+                                                    className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4"
+                                                />
+                                                <span>Tambah foto</span>
+                                            </label>
+
+                                            {isExtraPhotoChecked && (
+                                                <div className="mt-2.5 pl-6 flex items-center gap-2">
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        value={extraPhotoCount}
+                                                        onChange={(e) => setExtraPhotoCount(Math.max(1, Number(e.target.value)))}
+                                                        className="w-20 rounded-lg border px-2 py-1 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 outline-none focus:border-brand-500 font-bold"
+                                                    />
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                        foto
+                                                        {isFinanceVisible && ` (+Rp ${extraPhotoPrice.toLocaleString("id-ID")})`}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <label key={item.id}
+                                        className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-sm transition-colors ${selectedAddons.includes(item.name) ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium" : "border-gray-200 dark:border-gray-800"}`}>
+                                        <input type="checkbox" checked={selectedAddons.includes(item.name)} onChange={() => toggleAddon(item.name)}
+                                            className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4" />
+                                        <span>
+                                            {item.name} {isFinanceVisible ? `(+Rp ${item.price.toLocaleString("id-ID")})` : ""}
+                                        </span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
 
-                {/* 3. RINCIAN KEUANGAN — hanya untuk Owner/Bendahara */}
+                {/* 3. RINCIAN KEUANGAN */}
                 {isFinanceVisible && (
                     <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
                         <h3 className="font-bold text-gray-800 dark:text-white text-base">3. Rincian Pembayaran</h3>
@@ -330,8 +412,8 @@ export default function EditOrderPage() {
                                     className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700" />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1">Diskon (%)</label>
-                                <input type="number" min="0" max="100" value={discountPercent} onChange={(e) => setDiscountPercent(Number(e.target.value))} placeholder="0"
+                                <label className="block font-medium mb-1">Diskon (Rp)</label>
+                                <input type="number" value={discountAmount} onChange={(e) => setDiscountAmount(Number(e.target.value))} placeholder="0"
                                     className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 text-rose-500 font-semibold" />
                             </div>
                         </div>
@@ -348,7 +430,7 @@ export default function EditOrderPage() {
                             </div>
                         </div>
                         <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex justify-between text-sm font-semibold">
-                            <span>Total Harga: Rp {totalPrice.toLocaleString("id-ID")}{discountPercent > 0 && ` (diskon ${discountPercent}%)`}</span>
+                            <span>Total Harga: Rp {totalPrice.toLocaleString("id-ID")}{discountAmount > 0 && ` (Potongan Rp ${discountAmount.toLocaleString("id-ID")})`}</span>
                             <span className={remainingPayment <= 0 ? "text-emerald-500" : "text-rose-500"}>
                                 Sisa: Rp {remainingPayment.toLocaleString("id-ID")} ({remainingPayment <= 0 ? "LUNAS" : "BELUM LUNAS"})
                             </span>

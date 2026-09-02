@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
+import RoleGuard from "@/components/auth/RoleGuard";
 
 // Tipe item gabungan untuk tampilan tabel
 interface CombinedItem {
@@ -13,6 +14,14 @@ interface CombinedItem {
 }
 
 export default function ProductsPage() {
+  return (
+    <RoleGuard allowedRoles={["Owner"]}>
+      <ProductContent />
+    </RoleGuard>
+  );
+}
+
+function ProductContent() {
   const [items, setItems] = useState<CombinedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<string>("Semua");
@@ -160,14 +169,6 @@ export default function ProductsPage() {
     }
   };
 
-  // Kalkulasi Summary Cards
-  const summaryData = useMemo(() => {
-    const totalProducts = items.filter((i) => i.item_type === "product").length;
-    const totalAddons = items.filter((i) => i.item_type === "addon").length;
-
-    return { totalProducts, totalAddons };
-  }, [items]);
-
   // Filter List (Berdasarkan Tab Filter & Search Input)
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -209,10 +210,11 @@ export default function ProductsPage() {
             <button
               key={tab}
               onClick={() => setSelectedType(tab)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${selectedType === tab
-                ? "bg-brand-500 text-white"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200"
-                }`}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                selectedType === tab
+                  ? "bg-brand-500 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200"
+              }`}
             >
               {tab}
             </button>
@@ -243,7 +245,7 @@ export default function ProductsPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="text-center py-6">
+                  <td colSpan={4} className="text-center py-6 text-gray-500">
                     Memuat data...
                   </td>
                 </tr>

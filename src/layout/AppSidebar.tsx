@@ -19,6 +19,7 @@ import {
   User,
   Layers,
   Handshake,
+  Clock,
 } from "lucide-react";
 
 type NavItem = {
@@ -63,6 +64,11 @@ const navItems: NavItem[] = [
     icon: <Handshake />,
     name: "Reseller",
     path: "/resellers",
+  },
+  {
+    icon: <Clock />,
+    name: "Presensi Pegawai",
+    path: "/attendances",
   },
   {
     icon: <User />,
@@ -137,8 +143,18 @@ const AppSidebar: React.FC = () => {
       return role === "Owner";
     }
 
+    // Menu Presensi: HANYA untuk Owner
+    if (item.path === "/attendances") {
+      return role === "Owner";
+    }
+
     // Menu Keuangan (Kas): HANYA untuk Owner atau Bendahara (Staff di-hide)
     if (item.path === "/finance") {
+      return role === "Owner" || role === "Bendahara";
+    }
+
+    // Menu Keuangan (Kas): HANYA untuk Owner atau Bendahara (Staff di-hide)
+    if (item.path === "/invoices") {
       return role === "Owner" || role === "Bendahara";
     }
 

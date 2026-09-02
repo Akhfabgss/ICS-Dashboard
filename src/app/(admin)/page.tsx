@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Order, OrderStatus } from "@/types/order";
 import { InventoryItem } from "@/types/inventory";
 import StatisticsChart from "@/components/ecommerce/StatisticsChart";
+import StaffAttendanceWidget from "@/components/dashboard/StaffAttendanceWidget"; // Import Widget Presensi Staff
 
 export default function Home() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -120,7 +121,7 @@ export default function Home() {
         stock: data.remaining,
       }))
       .filter((item) => item.stock <= 5)
-      .slice(0, 10); // Batasi maksimal 10 barang
+      .slice(0, 5);
   }, [inventoryItems]);
 
   const getStatusBadge = (status: OrderStatus) => {
@@ -184,7 +185,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* GRAFIK STATISTIK HANYA TAMPIL DI OWNER & BENDAHARA */}
+          {/* GRAFIK STATISTIK */}
           <div className="grid grid-cols-12 gap-4 md:gap-6">
             <div className="col-span-12">
               <StatisticsChart />
@@ -232,9 +233,9 @@ export default function Home() {
         </div>
       )}
 
-      {/* 2. TABEL PESANAN TERAKHIR (MAX 15) & STOK MENIPIS (MAX 10) */}
+      {/* 2. KONTEN UTAMA DASHBOARD & WIDGET ABSENSI */}
       <div className="grid grid-cols-12 gap-4 md:gap-6">
-        {/* Recent Orders (Max 15 Data) */}
+        {/* Recent Orders (Kiri - 8 Kolom) */}
         <div className="col-span-12 xl:col-span-8 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-gray-800 dark:text-white">Pesanan Terakhir (Recent Orders)</h3>
@@ -292,31 +293,39 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Low Stock (Max 10 Data) */}
-        <div className="col-span-12 xl:col-span-4 rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-gray-800 dark:text-white">Peringatan Stok Menipis</h3>
-            <Link href="/stock" className="text-sm text-brand-500 hover:underline">Kelola Stok</Link>
-          </div>
-          <div className="space-y-4">
-            {loading ? (
-              <p className="text-xs text-gray-400">Memuat stok...</p>
-            ) : lowStockItems.length === 0 ? (
-              <p className="text-xs text-emerald-500 font-medium">Semua stok barang aman (di atas 5 Pcs).</p>
-            ) : (
-              lowStockItems.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center border-b border-gray-100 pb-3 dark:border-gray-800">
-                  <div>
-                    <p className="font-medium text-gray-800 dark:text-white">{item.name}</p>
-                    <p className="text-xs text-gray-400">Kategori: {item.category}</p>
+        {/* Kolom Kanan (4 Kolom) - WIDGET ABSENSI & STOK MENIPIS */}
+        <div className="col-span-12 xl:col-span-4 space-y-6">
+          {/* 1. WIDGET ABSENSI STAFF */}
+          <StaffAttendanceWidget />
+
+          {/* 2. PERINGATAN STOK MENIPIS */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800 dark:text-white">Peringatan Stok Menipis</h3>
+              <Link href="/stock" className="text-sm text-brand-500 hover:underline font-medium">
+                Kelola Stok
+              </Link>
+            </div>
+            <div className="space-y-4">
+              {loading ? (
+                <p className="text-xs text-gray-400">Memuat stok...</p>
+              ) : lowStockItems.length === 0 ? (
+                <p className="text-xs text-emerald-500 font-medium">Semua stok barang aman (di atas 5 Pcs).</p>
+              ) : (
+                lowStockItems.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center border-b border-gray-100 pb-3 dark:border-gray-800">
+                    <div>
+                      <p className="font-medium text-gray-800 dark:text-white">{item.name}</p>
+                      <p className="text-xs text-gray-400">Kategori: {item.category}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-rose-500">{item.stock} pcs tersisa</span>
+                      <p className="text-xs text-gray-400">Batas Min: 5 pcs</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-rose-500">{item.stock} pcs tersisa</span>
-                    <p className="text-xs text-gray-400">Batas Min: 5 pcs</p>
-                  </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>

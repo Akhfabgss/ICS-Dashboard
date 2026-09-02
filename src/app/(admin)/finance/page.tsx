@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
 import RoleGuard from "@/components/auth/RoleGuard";
+import flatpickr from "flatpickr";
+import "flatpickr/dist/flatpickr.css";
+import { CalenderIcon } from "@/icons"; // Sesuaikan dengan icon tanggal kamu
 
 interface CashFlowItem {
   id: string; // ID Tampilan (Order/CF-xxx)
@@ -29,13 +32,16 @@ export default function FinancePage() {
 
 function FinanceContent() {
   const [filterType, setFilterType] = useState<"all" | "income" | "expense">("all");
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // State untuk Edit Transaksi
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // Ref Flatpickr
+  const datePickerRef = useRef<HTMLInputElement | null>(null);
+  const fpInstance = useRef<flatpickr.Instance | null>(null);
 
-  // State Data Arus Kas
+  // State Edit
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [cashFlows, setCashFlows] = useState<CashFlowItem[]>([]);
 
   // State Form Modal
@@ -45,23 +51,72 @@ function FinanceContent() {
   const [expenseNotes, setExpenseNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch Data dari Database Supabase (Gabungan Orders & Finances)
+  // Inisialisasi Flatpickr Rentang Tanggal
+  useEffect(() => {
+    if (datePickerRef.current) {
+      fpInstance.current = flatpickr(datePickerRef.current, {
+        mode: "range",
+        dateFormat: "Y-m-d",
+        onChange: (selectedDates) => {
+          if (selectedDates.length === 2) {
+            setDateRange([selectedDates[0], selectedDates[1]]);
+          } else if (selectedDates.length === 0) {
+            setDateRange([null, null]);
+          }
+        },
+      });
+    }
+
+    return () => {
+      if (fpInstance.current) {
+        fpInstance.current.destroy();
+      }
+    };
+  }, []);
+
+  const handleResetDate = () => {
+    setDateRange([null, null]);
+    if (fpInstance.current) {
+      fpInstance.current.clear();
+    }
+  };
+
+  // Helper Preset Cepat (Misal: Bulan Lalu / Minggu Lalu)
+  const setQuickRange = (type: "last_week" | "last_month") => {
+    const now = new Date();
+    let start = new Date();
+    let end = new Date();
+
+    if (type === "last_week") {
+      // 7 Hari - 14 Hari lalu (Minggu Kemarin)
+      start.setDate(now.getDate() - 14);
+      end.setDate(now.getDate() - 7);
+    } else if (type === "last_month") {
+      // Bulan lalu full
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end = new Date(now.getFullYear(), now.getMonth(), 0);
+    }
+
+    setDateRange([start, end]);
+    if (fpInstance.current) {
+      fpInstance.current.setDate([start, end], true);
+    }
+  };
+
+  // Fetch Data dari Database Supabase
   const fetchFinanceData = async () => {
     setLoading(true);
 
-    // 1. Fetch Data Pemasukan dari Pesanan (Orders) yang sudah terbayar
     const { data: ordersData } = await supabase
       .from("orders")
       .select("id, order_number, customer_name, dp_amount, repayment_amount, created_at");
 
-    // 2. Fetch Data dari Tabel Finances
     const { data: financesData } = await supabase
       .from("finances")
       .select("id, title, income, expense, notes, created_at, reseller_id");
 
     const flowList: CashFlowItem[] = [];
 
-    // Transform Data Orders ke Pemasukan (Income)
     if (ordersData) {
       ordersData.forEach((ord) => {
         const totalPaid = Number(ord.dp_amount || 0) + Number(ord.repayment_amount || 0);
@@ -86,13 +141,11 @@ function FinanceContent() {
       });
     }
 
-    // Transform Data Finances
     if (financesData) {
       financesData.forEach((fin, idx) => {
         const isIncome = Number(fin.income) > 0;
         const amountVal = isIncome ? Number(fin.income) : Number(fin.expense);
 
-        // Pengecekan apakah transaksi ini berasal dari Komisi Reseller
         const isReseller =
           Boolean(fin.reseller_id) ||
           (fin.notes && fin.notes.includes("[OTOMATIS_RESELLER]")) ||
@@ -126,7 +179,6 @@ function FinanceContent() {
       });
     }
 
-    // Sort berdasarkan tanggal terbaru
     flowList.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
     setCashFlows(flowList);
     setLoading(false);
@@ -136,29 +188,53 @@ function FinanceContent() {
     fetchFinanceData();
   }, []);
 
-  // Kalkulasi Total Statistik
+  // Filter Dinamis Berdasarkan Single Input Date Range
+  const filteredFlows = useMemo(() => {
+    const [startDate, endDate] = dateRange;
+
+    return cashFlows.filter((flow) => {
+      // Filter Tipe (Income / Expense / All)
+      if (filterType === "income" && flow.type !== "income") return false;
+      if (filterType === "expense" && flow.type !== "expense") return false;
+
+      // Filter Rentang Tanggal Bebas
+      const flowDate = new Date(flow.rawDate);
+      flowDate.setHours(0, 0, 0, 0);
+
+      let matchesStart = true;
+      if (startDate) {
+        const s = new Date(startDate);
+        s.setHours(0, 0, 0, 0);
+        matchesStart = flowDate >= s;
+      }
+
+      let matchesEnd = true;
+      if (endDate) {
+        const e = new Date(endDate);
+        e.setHours(23, 59, 59, 999);
+        matchesEnd = flowDate <= e;
+      }
+
+      return matchesStart && matchesEnd;
+    });
+  }, [cashFlows, filterType, dateRange]);
+
+  // Total Statistik Mengikuti Hasil Filter Tanggal
   const totalIncome = useMemo(() => {
-    return cashFlows
+    return filteredFlows
       .filter((item) => item.type === "income")
       .reduce((acc, curr) => acc + curr.rawAmount, 0);
-  }, [cashFlows]);
+  }, [filteredFlows]);
 
   const totalExpense = useMemo(() => {
-    return cashFlows
+    return filteredFlows
       .filter((item) => item.type === "expense")
       .reduce((acc, curr) => acc + curr.rawAmount, 0);
-  }, [cashFlows]);
+  }, [filteredFlows]);
 
   const netProfit = totalIncome - totalExpense;
 
-  // Filter Data Arus Kas
-  const filteredFlows = cashFlows.filter((flow) => {
-    if (filterType === "income") return flow.type === "income";
-    if (filterType === "expense") return flow.type === "expense";
-    return true;
-  });
-
-  // Handler Hapus Transaksi Manual
+  // Handler Hapus & Form Modals
   const handleDelete = async (dbId: string) => {
     const result = await Swal.fire({
       title: "Konfirmasi Hapus",
@@ -183,7 +259,6 @@ function FinanceContent() {
     }
   };
 
-  // Handler Buka Modal Edit
   const handleOpenEdit = (flow: CashFlowItem) => {
     if (!flow.dbId) return;
     setEditingId(flow.dbId);
@@ -194,7 +269,6 @@ function FinanceContent() {
     setIsExpenseModalOpen(true);
   };
 
-  // Reset Modal ke Mode Tambah Baru
   const handleOpenNew = () => {
     setEditingId(null);
     setTransactionType("expense");
@@ -204,7 +278,6 @@ function FinanceContent() {
     setIsExpenseModalOpen(true);
   };
 
-  // Submit Transaksi Baru / Edit
   const handleSaveExpense = async () => {
     if (!expenseAmount || Number(expenseAmount) <= 0) {
       Swal.fire("Perhatian", "Masukkan nominal transaksi yang valid!", "warning");
@@ -236,7 +309,11 @@ function FinanceContent() {
     if (error) {
       Swal.fire("Error!", "Gagal menyimpan transaksi: " + error.message, "error");
     } else {
-      Swal.fire("Berhasil!", editingId ? "Transaksi berhasil diperbarui." : "Transaksi berhasil ditambahkan.", "success");
+      Swal.fire(
+        "Berhasil!",
+        editingId ? "Transaksi berhasil diperbarui." : "Transaksi berhasil ditambahkan.",
+        "success"
+      );
       setIsExpenseModalOpen(false);
       setExpenseAmount("");
       setExpenseNotes("");
@@ -247,7 +324,7 @@ function FinanceContent() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* 1. HEADER & TOMBOL INPUT PENGELUARAN */}
+      {/* 1. HEADER */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Keuangan &amp; Arus Kas</h2>
@@ -263,7 +340,7 @@ function FinanceContent() {
         </button>
       </div>
 
-      {/* 2. STATISTIK ARUS KAS */}
+      {/* 2. STATISTIK ARUS KAS (OTOMATIS BERUBAH IKUT FILTER TANGGAL) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
           <span className="text-xs font-medium uppercase text-gray-400">Total Pemasukan (Income)</span>
@@ -285,43 +362,60 @@ function FinanceContent() {
         </div>
       </div>
 
-      {/* 3. TABEL ARUS KAS (CASH FLOW) */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-white">Riwayat Mutasi Kas</h3>
-
-          {/* Filter Tab */}
-          <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-medium dark:bg-gray-800">
-            <button
-              onClick={() => setFilterType("all")}
-              className={`px-3 py-1.5 rounded-lg transition ${filterType === "all"
-                ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white"
-                : "text-gray-500"
-                }`}
-            >
-              Semua
-            </button>
-            <button
-              onClick={() => setFilterType("income")}
-              className={`px-3 py-1.5 rounded-lg transition ${filterType === "income"
-                ? "bg-white text-emerald-600 shadow-xs dark:bg-gray-700 dark:text-emerald-400"
-                : "text-gray-500"
-                }`}
-            >
-              Pemasukan
-            </button>
-            <button
-              onClick={() => setFilterType("expense")}
-              className={`px-3 py-1.5 rounded-lg transition ${filterType === "expense"
-                ? "bg-white text-rose-500 shadow-xs dark:bg-gray-700 dark:text-rose-400"
-                : "text-gray-500"
-                }`}
-            >
-              Pengeluaran
-            </button>
+      {/* 3. TABEL ARUS KAS & FILTER FLEXIBLE DATE RANGE */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
+        {/* Single Input Date Range Picker */}
+        <div className="relative inline-flex items-center gap-2">
+          <div className="relative">
+            <CalenderIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10 w-6 h-6" />
+            <input
+              ref={datePickerRef}
+              className="h-9 w-52 pl-9 pr-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 cursor-pointer focus:border-brand-500"
+              placeholder="Pilih rentang tanggal..."
+            />
           </div>
+
+          {dateRange[0] && (
+            <button
+              onClick={handleResetDate}
+              className="text-xs text-rose-500 hover:underline font-medium"
+            >
+              Reset
+            </button>
+          )}
         </div>
 
+        <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-medium dark:bg-gray-800">
+          <button
+            onClick={() => setFilterType("all")}
+            className={`px-3 py-1 rounded-lg transition ${filterType === "all"
+              ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white"
+              : "text-gray-500"
+              }`}
+          >
+            Semua
+          </button>
+          <button
+            onClick={() => setFilterType("income")}
+            className={`px-3 py-1 rounded-lg transition ${filterType === "income"
+              ? "bg-white text-emerald-600 shadow-xs dark:bg-gray-700 dark:text-emerald-400"
+              : "text-gray-500"
+              }`}
+          >
+            Pemasukan
+          </button>
+          <button
+            onClick={() => setFilterType("expense")}
+            className={`px-3 py-1 rounded-lg transition ${filterType === "expense"
+              ? "bg-white text-rose-500 shadow-xs dark:bg-gray-700 dark:text-rose-400"
+              : "text-gray-500"
+              }`}
+          >
+            Pengeluaran
+          </button>
+        </div>
+      </div>
+      <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
@@ -344,7 +438,7 @@ function FinanceContent() {
               ) : filteredFlows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-4 text-center text-gray-400">
-                    Belum ada riwayat mutasi kas.
+                    Belum ada riwayat mutasi kas pada rentang tanggal ini.
                   </td>
                 </tr>
               ) : (
@@ -412,7 +506,6 @@ function FinanceContent() {
               {editingId ? "Edit Catatan Kas" : "Catat Pengeluaran Baru"}
             </h3>
             <div className="space-y-4">
-              {/* Jenis Transaksi */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Tipe Transaksi</label>
                 <select
@@ -431,7 +524,6 @@ function FinanceContent() {
                 </select>
               </div>
 
-              {/* Kategori Dinamis */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kategori</label>
                 <select

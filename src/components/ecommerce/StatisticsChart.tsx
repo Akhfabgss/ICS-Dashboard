@@ -340,7 +340,7 @@ export default function StatisticsChart() {
           {/* 3. Date Picker & Reset */}
           <div className="relative inline-flex items-center gap-2">
             <div className="relative">
-              <CalenderIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10 w-4 h-4" />
+              <CalenderIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10 w-6 h-6" />
               <input
                 ref={datePickerRef}
                 className="h-9 w-44 pl-9 pr-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 cursor-pointer focus:border-brand-500"

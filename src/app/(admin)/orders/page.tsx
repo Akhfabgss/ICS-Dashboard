@@ -1,20 +1,57 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
 import { Order, OrderStatus } from "@/types/order";
 import { UserProfile } from "@/types/users";
 import Link from "next/link";
+import flatpickr from "flatpickr";
+import "flatpickr/dist/flatpickr.css";
+import { CalenderIcon } from "@/icons"; // Sesuaikan path icon milikmu
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<UserProfile[]>([]);
 
-  // Fetch Daftar Pesanan
+  const datePickerRef = useRef<HTMLInputElement | null>(null);
+  const fpInstance = useRef<flatpickr.Instance | null>(null);
+
+  // Inisialisasi Flatpickr Rentang Tanggal
+  useEffect(() => {
+    if (datePickerRef.current) {
+      fpInstance.current = flatpickr(datePickerRef.current, {
+        mode: "range",
+        dateFormat: "Y-m-d",
+        onChange: (selectedDates) => {
+          if (selectedDates.length === 2) {
+            setDateRange([selectedDates[0], selectedDates[1]]);
+          } else if (selectedDates.length === 0) {
+            setDateRange([null, null]);
+          }
+        },
+      });
+    }
+
+    return () => {
+      if (fpInstance.current) {
+        fpInstance.current.destroy();
+      }
+    };
+  }, []);
+
+  const handleResetDate = () => {
+    setDateRange([null, null]);
+    if (fpInstance.current) {
+      fpInstance.current.clear();
+    }
+  };
+
+  // Fetch Daftar Pesanan & Staf
   const fetchOrders = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -27,7 +64,6 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const init = async () => {
-      // 1. Ambil User & Role yang sedang login
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -40,19 +76,22 @@ export default function OrdersPage() {
           .single();
 
         if (profile?.role) {
-          // Normalisasi role ke lowercase & hapus spasi
           setUserRole(String(profile.role).toLowerCase().trim());
         }
       }
 
-      // 2. Ambil Daftar Staf/Profil untuk Dropdown Assignee
+      // Filter khusus Staf & Designer
       const { data: staff, error: staffError } = await supabase
         .from("profiles")
         .select("id, full_name, email, role")
         .order("full_name");
 
       if (!staffError && staff) {
-        setStaffList(staff as UserProfile[]);
+        const onlyStaff = (staff as UserProfile[]).filter((s) => {
+          const r = String(s.role || "").toLowerCase().trim();
+          return r === "staff" || r === "designer";
+        });
+        setStaffList(onlyStaff);
       }
 
       await fetchOrders();
@@ -61,8 +100,6 @@ export default function OrdersPage() {
     init();
   }, []);
 
-  // PENGECEKAN ROLE (KEBAL CASE SENSITIVE):
-  // Jika role mengandung kata 'staff' atau 'designer', sembunyikan nominal keuangan.
   const normalizedRole = (userRole || "").toLowerCase().trim();
   const isFinanceVisible =
     normalizedRole !== "staff" &&
@@ -79,30 +116,35 @@ export default function OrdersPage() {
     return { totalOrders, paidOffOrders, pendingPaymentOrders, inProgressOrders };
   }, [orders]);
 
+  // Filter Gabungan Search Nama & Single Input Date Range
   const filteredOrders = useMemo(() => {
-    if (!searchQuery) return orders;
-    return orders.filter((o) =>
-      o.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [orders, searchQuery]);
+    const [startDate, endDate] = dateRange;
 
-  // Update Status Pesanan
-  const updateStatus = async (id: string, newStatus: OrderStatus) => {
-    const result = await Swal.fire({
-      title: "Ubah Status?",
-      text: `Ubah status pesanan menjadi "${newStatus}"?`,
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#aaa",
-      confirmButtonText: "Ya, Ubah!",
-      cancelButtonText: "Batal",
+    return orders.filter((o) => {
+      const matchesName = !searchQuery || o.customer_name.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const orderDate = new Date(o.created_at);
+      orderDate.setHours(0, 0, 0, 0);
+
+      let matchesStartDate = true;
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        matchesStartDate = orderDate >= start;
+      }
+
+      let matchesEndDate = true;
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        matchesEndDate = orderDate <= end;
+      }
+
+      return matchesName && matchesStartDate && matchesEndDate;
     });
+  }, [orders, searchQuery, dateRange]);
 
-    if (!result.isConfirmed) {
-      setOrders((prev) => [...prev]);
-      return;
-    }
+  const updateStatus = async (id: string, newStatus: OrderStatus) => {
 
     const { error } = await supabase
       .from("orders")
@@ -124,7 +166,6 @@ export default function OrdersPage() {
     }
   };
 
-  // Update Penugasan Pekerja (Assignee)
   const updateAssignee = async (id: string, assignedToValue: string) => {
     const selectedStaff = staffList.find(
       (s) => s.id === assignedToValue || s.full_name === assignedToValue
@@ -153,7 +194,6 @@ export default function OrdersPage() {
     }
   };
 
-  // Hapus Order
   const handleDelete = async (id: string, orderNumber: string) => {
     const result = await Swal.fire({
       title: "Konfirmasi Hapus",
@@ -184,8 +224,12 @@ export default function OrdersPage() {
     }
   };
 
-  const getStatusBadge = (status: OrderStatus) => {
+  const getStatusBadge = (status: OrderStatus | string) => {
     switch (status) {
+      case "Dalam Daftar":
+        return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+      case "Pending":
+        return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
       case "Proses Design":
         return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
       case "Pengerjaan":
@@ -249,8 +293,30 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* SEARCH */}
-      <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
+      {/* FILTER TANGGAL RENTANG & PENCARIAN */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
+        {/* Single Date Range Picker */}
+        <div className="relative inline-flex items-center gap-2">
+          <div className="relative">
+            <CalenderIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10 w-6 h-6" />
+            <input
+              ref={datePickerRef}
+              className="h-9 w-48 pl-9 pr-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 cursor-pointer focus:border-brand-500"
+              placeholder="Pilih rentang tgl..."
+            />
+          </div>
+
+          {dateRange[0] && (
+            <button
+              onClick={handleResetDate}
+              className="text-xs text-rose-500 hover:underline font-medium"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
+        {/* Search Bar */}
         <input
           type="text"
           placeholder="Cari nama pemesan..."
@@ -260,7 +326,7 @@ export default function OrdersPage() {
         />
       </div>
 
-      {/* TABEL */}
+      {/* TABEL ORDERS */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900">
         <div className="max-w-full overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -285,14 +351,13 @@ export default function OrdersPage() {
               ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-6 text-gray-500">
-                    {searchQuery
-                      ? "Tidak ada pesanan yang sesuai dengan pencarian."
+                    {searchQuery || dateRange[0]
+                      ? "Tidak ada pesanan yang sesuai dengan filter."
                       : "Belum ada pesanan terdaftar."}
                   </td>
                 </tr>
               ) : (
                 filteredOrders.map((order) => {
-                  // Matching penugasan staf
                   const selectedAssigneeValue =
                     staffList.find(
                       (s) =>
@@ -327,7 +392,6 @@ export default function OrdersPage() {
                         )}
                       </td>
 
-                      {/* RINCIAN HARGA / STATUS BAYAR */}
                       <td className="px-4 py-3">
                         {isFinanceVisible ? (
                           <>
@@ -336,8 +400,8 @@ export default function OrdersPage() {
                             </p>
                             <span
                               className={`inline-block mt-1 px-2 py-0.5 text-xs font-semibold rounded-full ${order.is_paid_off
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                  : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                                 }`}
                             >
                               {order.is_paid_off
@@ -346,11 +410,10 @@ export default function OrdersPage() {
                             </span>
                           </>
                         ) : (
-                          /* HANYA BADGE UNTUK AKUN STAFF */
                           <span
                             className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full ${order.is_paid_off
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                               }`}
                           >
                             {order.is_paid_off ? "LUNAS" : "BELUM LUNAS"}
@@ -366,6 +429,8 @@ export default function OrdersPage() {
                             order.status
                           )}`}
                         >
+                          <option value="Dalam Daftar">Dalam Daftar</option>
+                          <option value="Pending">Pending</option>
                           <option value="Proses Design">Proses Design</option>
                           <option value="Pengerjaan">Pengerjaan</option>
                           <option value="Pengiriman">Pengiriman</option>
@@ -373,6 +438,7 @@ export default function OrdersPage() {
                           <option value="Trouble">Trouble</option>
                         </select>
                       </td>
+
                       <td className="px-4 py-3">
                         <select
                           value={selectedAssigneeValue}
@@ -387,6 +453,7 @@ export default function OrdersPage() {
                           ))}
                         </select>
                       </td>
+
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1.5">
                           <Link
