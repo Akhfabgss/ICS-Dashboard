@@ -13,7 +13,7 @@ interface StockSummary {
   totalIn: number;
   totalOut: number;
   remaining: number;
-  latestItem: InventoryItem; // Menyimpan referensi record untuk opsi Edit & Hapus
+  latestItem: InventoryItem;
 }
 
 export default function InventoryPage() {
@@ -98,16 +98,18 @@ export default function InventoryPage() {
       .slice(0, 4);
   }, [stockSummaryList]);
 
-  // Filter Tabel berdasarkan Kategori & Query Pencarian
+  // 3. FILTER TABEL & URUTKAN BERDASARKAN ABJAD (A-Z)
   const filteredSummaryList = useMemo(() => {
-    return stockSummaryList.filter((item) => {
-      const matchCategory =
-        selectedCategory === "Semua" || item.category === selectedCategory;
-      const matchSearch = item.name
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-      return matchCategory && matchSearch;
-    });
+    return stockSummaryList
+      .filter((item) => {
+        const matchCategory =
+          selectedCategory === "Semua" || item.category === selectedCategory;
+        const matchSearch = item.name
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase());
+        return matchCategory && matchSearch;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "id", { sensitivity: "base" })); // URUT ABJAD A-Z
   }, [stockSummaryList, selectedCategory, searchQuery]);
 
   return (
@@ -189,10 +191,8 @@ export default function InventoryPage() {
 
       {/* FILTER & SEARCH BARS */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
-
-        {/* DESIGN FILTER CATEGORY MIRIP FINANCE PAGE */}
         <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-medium dark:bg-gray-800">
-          {["Semua", "Bingkai", "Packing", "Merchandise"].map((cat) => (
+          {["Semua", "Bingkai", "Packaging", "Merchandise"].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}

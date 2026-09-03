@@ -567,7 +567,7 @@ function FinanceContent() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">Keterangan / Catatan</label>
                 <textarea
                   rows={3}
-                  placeholder="Pembelian lakban dan dus packing..."
+                  placeholder="Pembelian lakban dan dus Packaging..."
                   value={expenseNotes}
                   onChange={(e) => setExpenseNotes(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 p-2.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white"

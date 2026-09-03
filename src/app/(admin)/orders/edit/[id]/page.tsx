@@ -19,6 +19,14 @@ interface AddonOption {
     price: number;
 }
 
+interface MutationItem {
+    item_name: string;
+    category: string;
+    stock_in: number;
+    stock_out: number;
+    notes: string;
+}
+
 const DEFAULT_DESIGN_FIELDS = [
     { key: "Nama Gunung / Lokasi", value: "" },
     { key: "Via / Jalur", value: "" },
@@ -59,7 +67,7 @@ export default function EditOrderPage() {
 
     const [framePrice, setFramePrice] = useState<number>(0);
     const [shippingFee, setShippingFee] = useState<number>(0);
-    const [discountAmount, setDiscountAmount] = useState<number>(0); // Nominal Rupiah (Rp)
+    const [discountAmount, setDiscountAmount] = useState<number>(0);
     const [dpAmount, setDpAmount] = useState<number>(0);
     const [repaymentAmount, setRepaymentAmount] = useState<number>(0);
 
@@ -195,6 +203,7 @@ export default function EditOrderPage() {
     const totalPrice = Math.max(0, subtotal - discountAmount);
     const remainingPayment = totalPrice - (dpAmount + repaymentAmount);
 
+    // SUBMIT HANDLER DENGAN REVERSAL & DEDUCT STOK OTOMATIS
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -216,6 +225,13 @@ export default function EditOrderPage() {
         if (isExtraPhotoChecked) {
             finalAddons.push(`Tambah foto (${extraPhotoCount} Foto)`);
         }
+
+        // 1. Dapatkan data order LAMA SEBELUM di-update ke Supabase!
+        const { data: oldOrder } = await supabase
+            .from("orders")
+            .select("product_name, status")
+            .eq("id", orderId)
+            .single();
 
         const basePayload: Record<string, unknown> = {
             customer_name: customerName.trim(),
@@ -240,15 +256,113 @@ export default function EditOrderPage() {
             basePayload.repayment_amount = repaymentAmount;
         }
 
+        // 2. Jalankan Update Order ke Supabase
         const { error } = await supabase.from("orders").update(basePayload).eq("id", orderId);
-        setSubmitting(false);
 
         if (error) {
+            setSubmitting(false);
             Swal.fire("Error", "Gagal memperbarui pesanan: " + error.message, "error");
-        } else {
-            Swal.fire("Berhasil!", "Data pesanan berhasil diperbarui.", "success");
-            router.push("/orders");
+            return;
         }
+
+        // 3. LOGIKA PENYESUAIAN STOK (Query manual ID bahan baku untuk menghindari miss Supabase join)
+        if (
+            oldOrder &&
+            (oldOrder.status === "Selesai" || oldOrder.status === "Done") &&
+            oldOrder.product_name.trim().toLowerCase() !== productName.trim().toLowerCase()
+        ) {
+            try {
+                // A. KEMBALIKAN STOK PRODUK LAMA (+stock_in / Rollback)
+                const { data: oldProd } = await supabase
+                    .from("products")
+                    .select("id")
+                    .ilike("name", oldOrder.product_name.trim())
+                    .maybeSingle();
+
+                if (oldProd) {
+                    const { data: oldRecipes } = await supabase
+                        .from("product_recipes")
+                        .select("inventory_id, quantity_required")
+                        .eq("product_id", oldProd.id);
+
+                    if (oldRecipes && oldRecipes.length > 0) {
+                        const invIds = oldRecipes.map((r) => r.inventory_id);
+                        const { data: invItems } = await supabase
+                            .from("inventory")
+                            .select("id, item_name")
+                            .in("id", invIds);
+
+                        const invMap = new Map(invItems?.map((i) => [i.id, i.item_name]));
+                        const rollbackMutations: MutationItem[] = [];
+
+                        oldRecipes.forEach((r) => {
+                            const itemName = invMap.get(r.inventory_id);
+                            if (itemName) {
+                                rollbackMutations.push({
+                                    item_name: itemName.trim(),
+                                    category: "Adjustment",
+                                    stock_in: Number(r.quantity_required || 1),
+                                    stock_out: 0,
+                                    notes: `Rollback stok karena Edit Order #${orderNumber} (${oldOrder.product_name} -> ${productName})`,
+                                });
+                            }
+                        });
+
+                        if (rollbackMutations.length > 0) {
+                            await supabase.from("inventory").insert(rollbackMutations);
+                        }
+                    }
+                }
+
+                // B. POTONG STOK PRODUK BARU (-stock_out / Deduct)
+                const { data: newProd } = await supabase
+                    .from("products")
+                    .select("id")
+                    .ilike("name", productName.trim())
+                    .maybeSingle();
+
+                if (newProd) {
+                    const { data: newRecipes } = await supabase
+                        .from("product_recipes")
+                        .select("inventory_id, quantity_required")
+                        .eq("product_id", newProd.id);
+
+                    if (newRecipes && newRecipes.length > 0) {
+                        const invIds = newRecipes.map((r) => r.inventory_id);
+                        const { data: invItems } = await supabase
+                            .from("inventory")
+                            .select("id, item_name")
+                            .in("id", invIds);
+
+                        const invMap = new Map(invItems?.map((i) => [i.id, i.item_name]));
+                        const deductMutations: MutationItem[] = [];
+
+                        newRecipes.forEach((r) => {
+                            const itemName = invMap.get(r.inventory_id);
+                            if (itemName) {
+                                deductMutations.push({
+                                    item_name: itemName.trim(),
+                                    category: "Penjualan",
+                                    stock_in: 0,
+                                    stock_out: Number(r.quantity_required || 1),
+                                    notes: `Pemotongan resep produk baru dari Edit Order #${orderNumber}`,
+                                });
+                            }
+                        });
+
+                        if (deductMutations.length > 0) {
+                            await supabase.from("inventory").insert(deductMutations);
+                        }
+                    }
+                }
+            } catch (stkErr) {
+                console.error("Gagal menyesuaikan stok otomatis:", stkErr);
+            }
+        }
+
+        setSubmitting(false);
+        Swal.fire("Berhasil!", "Data pesanan berhasil diperbarui.", "success");
+        router.push("/orders");
     };
 
     if (loading) {
@@ -262,7 +376,7 @@ export default function EditOrderPage() {
                 <button
                     type="button"
                     onClick={() => router.back()}
-                    className="p-2 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    className="p-2 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -445,7 +559,7 @@ export default function EditOrderPage() {
                             {isFinanceVisible ? "4." : "3."} Data Isian Desain
                         </h3>
                         <button type="button" onClick={() => setDesignFields([...designFields, { key: "", value: "" }])}
-                            className="text-sm font-semibold text-brand-600 dark:text-brand-400 hover:underline">
+                            className="text-sm font-semibold text-brand-600 dark:text-brand-400 hover:underline cursor-pointer">
                             + Tambah Poin Custom
                         </button>
                     </div>
@@ -459,7 +573,7 @@ export default function EditOrderPage() {
                                     onChange={(e) => { const u = [...designFields]; u[index].value = e.target.value; setDesignFields(u); }}
                                     className="flex-1 rounded-xl border p-2 text-sm bg-transparent dark:border-gray-700" />
                                 <button type="button" onClick={() => setDesignFields(designFields.filter((_, i) => i !== index))}
-                                    className="p-2 text-rose-500 hover:text-rose-700">
+                                    className="p-2 text-rose-500 hover:text-rose-700 cursor-pointer">
                                     <Trash2 className="w-4 h-4" />
                                 </button>
                             </div>
@@ -470,11 +584,11 @@ export default function EditOrderPage() {
                 {/* SUBMIT BUTTON */}
                 <div className="flex justify-end gap-3">
                     <button type="button" onClick={() => router.back()}
-                        className="px-6 py-3 rounded-xl border dark:border-gray-700 font-medium text-sm">
+                        className="px-6 py-3 rounded-xl border dark:border-gray-700 font-medium text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
                         Batal
                     </button>
                     <button type="submit" disabled={submitting}
-                        className="px-6 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 disabled:opacity-50 transition-colors">
+                        className="px-6 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 disabled:opacity-50 transition-colors cursor-pointer">
                         {submitting ? "Menyimpan..." : "Perbarui Pesanan"}
                     </button>
                 </div>

@@ -24,7 +24,7 @@ export default function InventoryFormModal({
 
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [itemName, setItemName] = useState("");
-  const [category, setCategory] = useState<"Bingkai" | "Packing" | "Merchandise">("Bingkai");
+  const [category, setCategory] = useState<"Bingkai" | "Packaging" | "Merchandise">("Bingkai");
   const [vendor, setVendor] = useState("");
   const [stockIn, setStockIn] = useState<number>(0);
   const [stockOut, setStockOut] = useState<number>(0);
@@ -112,7 +112,7 @@ export default function InventoryFormModal({
                 className="w-full rounded-lg border p-2.5 bg-transparent dark:border-gray-700 dark:bg-gray-800"
               >
                 <option value="Bingkai">Bingkai</option>
-                <option value="Packing">Packing</option>
+                <option value="Packaging">Packaging</option>
                 <option value="Merchandise">Merchandise</option>
               </select>
             </div>

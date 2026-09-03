@@ -6,6 +6,6 @@ export interface InventoryItem {
   stock_out: number;
   remaining_stock: number;
   vendor: string;
-  category: 'Bingkai' | 'Packing' | 'Merchandise';
+  category: 'Bingkai' | 'Packaging' | 'Merchandise';
   created_at: string;
 }
