@@ -1,4 +1,4 @@
-export type OrderStatus = 'Proses Design' | 'Pengerjaan' | 'Pengiriman' | 'Selesai' | 'Trouble';
+export type OrderStatus = 'Dalam Daftar' | 'Pending' | 'Proses Design' | 'Pengerjaan' | 'Pengiriman' | 'Selesai' | 'Trouble';
 
 export interface Order {
   id: string;

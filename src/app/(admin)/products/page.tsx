@@ -13,6 +13,20 @@ interface CombinedItem {
   item_type: "product" | "addon";
 }
 
+// Tipe data Inventory (Bahan Baku)
+interface InventoryItem {
+  id: string;
+  item_name: string;
+}
+
+// Tipe data Resep yang sudah tersimpan
+interface RecipeItem {
+  id: string;
+  inventory_id: string;
+  inventory_name: string;
+  quantity_required: number;
+}
+
 export default function ProductsPage() {
   return (
     <RoleGuard allowedRoles={["Owner"]}>
@@ -23,11 +37,12 @@ export default function ProductsPage() {
 
 function ProductContent() {
   const [items, setItems] = useState<CombinedItem[]>([]);
+  const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<string>("Semua");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Modal State
+  // Modal State Form Produk/Addon
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [itemToEdit, setItemToEdit] = useState<CombinedItem | null>(null);
 
@@ -37,12 +52,24 @@ function ProductContent() {
   const [formPrice, setFormPrice] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. READ: Fetch Data dari tabel `products` & `add_ons`
+  // Modal State Atur Resep Bahan (BOM)
+  const [isRecipeOpen, setIsRecipeOpen] = useState(false);
+  const [selectedRecipeItem, setSelectedRecipeItem] = useState<CombinedItem | null>(null);
+  const [currentRecipes, setCurrentRecipes] = useState<RecipeItem[]>([]);
+  const [recipeLoading, setRecipeLoading] = useState(false);
+
+  // Inputs Tambah Bahan Ke Resep
+  const [inputInventoryId, setInputInventoryId] = useState("");
+  const [inputQuantity, setInputQuantity] = useState<number>(1);
+  const [addingRecipe, setAddingRecipe] = useState(false);
+
+  // 1. READ: Fetch Data dari tabel `products`, `add_ons`, & `inventory`
   const fetchProductsAndAddons = async () => {
     setLoading(true);
-    const [prodRes, addRes] = await Promise.all([
+    const [prodRes, addRes, invRes] = await Promise.all([
       supabase.from("products").select("id, name, price").order("name"),
       supabase.from("add_ons").select("id, name, price").order("name"),
+      supabase.from("inventory").select("id, item_name").order("item_name"),
     ]);
 
     const combinedList: CombinedItem[] = [];
@@ -67,6 +94,10 @@ function ProductContent() {
           item_type: "addon",
         });
       });
+    }
+
+    if (invRes.data) {
+      setInventoryList(invRes.data);
     }
 
     setItems(combinedList);
@@ -119,7 +150,7 @@ function ProductContent() {
     setIsFormOpen(true);
   };
 
-  // 3 & 4. CREATE & UPDATE: Submit Form
+  // 3 & 4. CREATE & UPDATE: Submit Form Produk / Addon
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
@@ -169,7 +200,82 @@ function ProductContent() {
     }
   };
 
-  // Filter List (Berdasarkan Tab Filter & Search Input)
+  // ==========================================
+  // FITUR RESEP BAHAN BAKU (STEP 4)
+  // ==========================================
+
+  // Open Modal Resep & Fetch Existing Recipes
+  const handleOpenRecipeModal = async (item: CombinedItem) => {
+    setSelectedRecipeItem(item);
+    setIsRecipeOpen(true);
+    setRecipeLoading(true);
+    setInputInventoryId("");
+    setInputQuantity(1);
+
+    const recipeTable = item.item_type === "product" ? "product_recipes" : "addon_recipes";
+    const foreignKey = item.item_type === "product" ? "product_id" : "addon_id";
+
+    const { data, error } = await supabase
+      .from(recipeTable)
+      .select("id, inventory_id, quantity_required, inventory(item_name)")
+      .eq(foreignKey, item.id);
+
+    if (!error && data) {
+      const mappedRecipes: RecipeItem[] = data.map((r: any) => ({
+        id: r.id,
+        inventory_id: r.inventory_id,
+        inventory_name: r.inventory?.item_name || "Bahan Tidak Ditemukan",
+        quantity_required: Number(r.quantity_required || 1),
+      }));
+      setCurrentRecipes(mappedRecipes);
+    }
+    setRecipeLoading(false);
+  };
+
+  // Tambah Bahan Ke Resep
+  const handleAddRecipeItem = async () => {
+    if (!selectedRecipeItem || !inputInventoryId) {
+      Swal.fire("Peringatan", "Pilih bahan baku dari stok terlebih dahulu!", "warning");
+      return;
+    }
+
+    setAddingRecipe(true);
+    const recipeTable = selectedRecipeItem.item_type === "product" ? "product_recipes" : "addon_recipes";
+    const foreignKey = selectedRecipeItem.item_type === "product" ? "product_id" : "addon_id";
+
+    const payload = {
+      [foreignKey]: selectedRecipeItem.id,
+      inventory_id: inputInventoryId,
+      quantity_required: Number(inputQuantity),
+    };
+
+    const { error } = await supabase.from(recipeTable).insert([payload]);
+    setAddingRecipe(false);
+
+    if (error) {
+      Swal.fire("Error", "Gagal menambahkan resep: " + error.message, "error");
+    } else {
+      setInputInventoryId("");
+      setInputQuantity(1);
+      handleOpenRecipeModal(selectedRecipeItem); // Refresh data resep
+    }
+  };
+
+  // Hapus Bahan Dari Resep
+  const handleDeleteRecipeItem = async (recipeId: string) => {
+    if (!selectedRecipeItem) return;
+
+    const recipeTable = selectedRecipeItem.item_type === "product" ? "product_recipes" : "addon_recipes";
+    const { error } = await supabase.from(recipeTable).delete().eq("id", recipeId);
+
+    if (error) {
+      Swal.fire("Error", "Gagal menghapus resep: " + error.message, "error");
+    } else {
+      handleOpenRecipeModal(selectedRecipeItem); // Refresh data resep
+    }
+  };
+
+  // Filter List
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchType =
@@ -192,12 +298,12 @@ function ProductContent() {
             Katalog Produk &amp; Add-ons
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Kelola daftar varian frame produk dan item tambahan beserta harganya.
+            Kelola daftar varian frame produk, add-ons, serta atur pemotongan resep stok bahan bakunya.
           </p>
         </div>
         <button
           onClick={() => handleOpenForm(null)}
-          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors"
+          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors cursor-pointer"
         >
           + Tambah Produk / Add-on
         </button>
@@ -210,11 +316,10 @@ function ProductContent() {
             <button
               key={tab}
               onClick={() => setSelectedType(tab)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                selectedType === tab
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${selectedType === tab
                   ? "bg-brand-500 text-white"
                   : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200"
-              }`}
+                }`}
             >
               {tab}
             </button>
@@ -280,15 +385,22 @@ function ProductContent() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        {/* TOMBOL ATUR RESEP BAHAN (STEP 4) */}
+                        <button
+                          onClick={() => handleOpenRecipeModal(item)}
+                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-pointer"
+                        >
+                          Atur Resep
+                        </button>
                         <button
                           onClick={() => handleOpenForm(item)}
-                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 cursor-pointer"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(item.id, item.name, item.item_type)}
-                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 cursor-pointer"
                         >
                           Hapus
                         </button>
@@ -302,7 +414,7 @@ function ProductContent() {
         </div>
       </div>
 
-      {/* MODAL FORM CREATE / EDIT */}
+      {/* MODAL FORM CREATE / EDIT PRODUK/ADDON */}
       {isFormOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4 text-gray-800 dark:text-white">
@@ -354,19 +466,120 @@ function ProductContent() {
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="px-4 py-2 text-sm rounded-lg border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="px-4 py-2 text-sm rounded-lg border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-sm rounded-lg bg-brand-500 text-white font-medium hover:bg-brand-600 disabled:opacity-50"
+                  className="px-4 py-2 text-sm rounded-lg bg-brand-500 text-white font-medium hover:bg-brand-600 disabled:opacity-50 cursor-pointer"
                 >
                   {submitting ? "Menyimpan..." : "Simpan Data"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ATUR RESEP BAHAN BAKU (STEP 4) */}
+      {isRecipeOpen && selectedRecipeItem && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl space-y-4 text-gray-800 dark:text-white">
+            <div>
+              <span className="text-xs font-semibold text-brand-500 uppercase tracking-wider">
+                Komposisi Stok Bahan
+              </span>
+              <h3 className="font-bold text-lg">
+                Atur Resep: {selectedRecipeItem.name}
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Pilih item dari stok gudang yang akan berkurang otomatis saat order selesai.
+              </p>
+            </div>
+
+            {/* Form Tambah Bahan Ke Resep */}
+            <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-xl space-y-3 border border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium mb-1">Pilih Bahan Stok</label>
+                  <select
+                    value={inputInventoryId}
+                    onChange={(e) => setInputInventoryId(e.target.value)}
+                    className="w-full text-xs rounded-lg border p-2 bg-white dark:bg-gray-800 dark:border-gray-700"
+                  >
+                    <option value="">-- Pilih Barang Stok --</option>
+                    {inventoryList.map((inv) => (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.item_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Jumlah (Pcs/Unit)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={inputQuantity}
+                    onChange={(e) => setInputQuantity(Number(e.target.value))}
+                    className="w-full text-xs rounded-lg border p-2 bg-white dark:bg-gray-800 dark:border-gray-700"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={addingRecipe || !inputInventoryId}
+                onClick={handleAddRecipeItem}
+                className="w-full py-2 text-xs font-semibold rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 cursor-pointer"
+              >
+                {addingRecipe ? "Menambahkan..." : "+ Tambahkan Bahan Ke Resep"}
+              </button>
+            </div>
+
+            {/* List Resep Tersimpan */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase text-gray-400">Daftar Bahan Yang Digunakan:</h4>
+              {recipeLoading ? (
+                <p className="text-xs text-gray-400 py-4 text-center">Memuat resep bahan...</p>
+              ) : currentRecipes.length === 0 ? (
+                <p className="text-xs text-amber-500 bg-amber-50 dark:bg-amber-500/10 p-3 rounded-lg text-center">
+                  Belum ada bahan baku yang dihubungkan ke item ini.
+                </p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                  {currentRecipes.map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex justify-between items-center p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 text-xs"
+                    >
+                      <div>
+                        <p className="font-bold">{r.inventory_name}</p>
+                        <p className="text-[10px] text-gray-400">Dibutuhkan: {r.quantity_required} Pcs per order</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteRecipeItem(r.id)}
+                        className="text-rose-500 hover:underline text-xs font-medium cursor-pointer"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Modal */}
+            <div className="flex justify-end pt-3 border-t dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setIsRecipeOpen(false)}
+                className="px-4 py-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-200 cursor-pointer"
+              >
+                Selesai &amp; Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

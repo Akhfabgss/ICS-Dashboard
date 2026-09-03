@@ -9,6 +9,7 @@ import Link from "next/link";
 import flatpickr from "flatpickr";
 import "flatpickr/dist/flatpickr.css";
 import { CalenderIcon } from "@/icons"; // Sesuaikan path icon milikmu
+import { deductStockForOrder } from "@/lib/stockDeduction";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -20,7 +21,6 @@ export default function OrdersPage() {
 
   const datePickerRef = useRef<HTMLInputElement | null>(null);
   const fpInstance = useRef<flatpickr.Instance | null>(null);
-
   // Inisialisasi Flatpickr Rentang Tanggal
   useEffect(() => {
     if (datePickerRef.current) {
@@ -144,26 +144,35 @@ export default function OrdersPage() {
     });
   }, [orders, searchQuery, dateRange]);
 
-  const updateStatus = async (id: string, newStatus: OrderStatus) => {
-
+  const updateStatus = async (order: Order, newStatus: OrderStatus) => {
     const { error } = await supabase
       .from("orders")
       .update({ status: newStatus })
-      .eq("id", id);
+      .eq("id", order.id);
 
     if (error) {
       Swal.fire("Error!", "Gagal mengubah status: " + error.message, "error");
-    } else {
-      Swal.fire({
-        toast: true,
-        position: "top-end",
-        icon: "success",
-        title: "Status berhasil diperbarui!",
-        showConfirmButton: false,
-        timer: 2000,
-      });
-      fetchOrders();
+      return;
     }
+
+    // Potong stok otomatis saat status berubah menjadi "Selesai"
+    if (newStatus === "Selesai") {
+      await deductStockForOrder(
+        order.product_name,          // nama produk → di-resolve ke ID di helper
+        order.add_ons ?? [],          // nama-nama addon
+        1                             // qty order (1 per order)
+      );
+    }
+
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "success",
+      title: "Status berhasil diperbarui!",
+      showConfirmButton: false,
+      timer: 2000,
+    });
+    fetchOrders();
   };
 
   const updateAssignee = async (id: string, assignedToValue: string) => {
@@ -424,7 +433,7 @@ export default function OrdersPage() {
                       <td className="px-4 py-3">
                         <select
                           value={order.status}
-                          onChange={(e) => updateStatus(order.id, e.target.value as OrderStatus)}
+                          onChange={(e) => updateStatus(order, e.target.value as OrderStatus)}
                           className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border-0 focus:ring-2 focus:ring-brand-500 ${getStatusBadge(
                             order.status
                           )}`}
