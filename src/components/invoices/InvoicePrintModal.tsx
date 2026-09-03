@@ -20,7 +20,6 @@ export default function InvoicePrintModal({ orders, isOpen, onClose }: InvoiceMo
     window.print();
   };
 
-  // Akumulasi Keseluruhan Item
   const totalFrameAndAddons = orders.reduce(
     (sum, o) => sum + Number(o.frame_price || 0) + Number(o.addons_price || 0),
     0
@@ -38,55 +37,81 @@ export default function InvoicePrintModal({ orders, isOpen, onClose }: InvoiceMo
 
   return (
     <>
-      {/* STYLE CSS UTUM KHUSUS SAAT CETAK (PRINT MEDIA STYLES) */}
       <style jsx global>{`
         @media print {
-          /* Menyembunyikan elemen latar belakang default browser */
-          body {
-            background: white !important;
+          @page {
+            margin: 0;
+            size: auto;
           }
 
-          ${printMode === "receipt"
-          ? `
-            /* PENGATURAN KERTAS KHUSUS STRUK THERMAL (80mm) */
-            @page {
-              size: 80mm auto;
-              margin: 0;
-            }
+          html, body {
+            background: #fff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+          }
 
-            .receipt-container {
-              width: 78mm !important;
-              max-width: 78mm !important;
-              margin: 0 auto !important;
-              padding: 5mm !important;
-              box-shadow: none !important;
-              border: none !important;
-            }
-          `
-          : `
-            /* PENGATURAN KERTAS INVOICE (A4) */
-            @page {
-              size: A4 portrait;
-              margin: 10mm;
-            }
-          `}
+          /* Sembunyikan seluruh elemen dashboard */
+          body * {
+            visibility: hidden !important;
+          }
+
+          /* Hanya tampilkan area yang dicetak */
+          .print-area,
+          .print-area * {
+            visibility: visible !important;
+          }
+
+          .print-area {
+            /* Gunakan relative/static agar margin auto untuk horizontal centering berfungsi */
+            position: relative !important;
+            top: 0 !important;
+            left: 0 !important;
+            margin: 0 auto !important; /* Posisikan ke tengah layar horizontal */
+            padding-top: 10mm !important;
+            background: #fff !important;
+            box-shadow: none !important;
+          }
+
+          /* Pengaturan lebar untuk Mode Invoice (A4) */
+          .print-area {
+            width: 90% !important;
+            max-width: 800px !important;
+          }
+
+          /* Tampilan Khusus Hasil Cetak Struk Thermal (80mm) */
+          .receipt-mode-print {
+            width: 80mm !important;
+            max-width: 80mm !important;
+            margin: 0 auto !important; /* Memastikan konten struk tetap di tengah */
+            padding: 2mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            font-size: 10px !important;
+            line-height: 1.3 !important;
+            color: #000 !important;
+          }
+
+          .receipt-mode-print * {
+            color: #000 !important;
+          }
         }
       `}</style>
 
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 overflow-y-auto print:bg-white print:p-0 print:static print:inset-auto">
+      {/* MODAL CONTAINER DENGAN OVERLAY HITAM */}
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 overflow-y-auto print:p-0 print:static print:bg-white">
         <div
-          className={`relative w-full rounded-2xl bg-white p-6 shadow-2xl text-gray-800 dark:bg-gray-900 dark:text-white print:p-0 print:shadow-none ${printMode === "receipt"
-            ? "max-w-md font-mono receipt-container print:w-[78mm] print:max-w-[78mm]"
-            : "max-w-2xl print:w-full print:max-w-none"
+          className={`print-area relative w-full rounded-2xl bg-white p-6 shadow-2xl text-gray-800 dark:bg-gray-900 dark:text-white transition-all print:p-0 print:shadow-none ${printMode === "receipt" ? "max-w-md" : "max-w-2xl"
             }`}
         >
-          {/* BARIS TOMBOL AKSI & TOGGLE MODE (TIDAK IKUT DICETAK) */}
+          {/* BARIS TOMBOL TOGGLE MODE & AKSI */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b gap-3 dark:border-gray-800 print:hidden">
             <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold dark:bg-gray-800">
               <button
                 type="button"
                 onClick={() => setPrintMode("invoice")}
-                className={`px-3 py-1.5 rounded-lg transition-colors ${printMode === "invoice"
+                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${printMode === "invoice"
                   ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
                   : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                   }`}
@@ -96,7 +121,7 @@ export default function InvoicePrintModal({ orders, isOpen, onClose }: InvoiceMo
               <button
                 type="button"
                 onClick={() => setPrintMode("receipt")}
-                className={`px-3 py-1.5 rounded-lg transition-colors ${printMode === "receipt"
+                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${printMode === "receipt"
                   ? "bg-white text-brand-600 shadow-xs dark:bg-gray-700 dark:text-brand-400 font-bold"
                   : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                   }`}
@@ -109,27 +134,26 @@ export default function InvoicePrintModal({ orders, isOpen, onClose }: InvoiceMo
               <button
                 type="button"
                 onClick={handlePrint}
-                className="px-4 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors cursor-pointer"
               >
                 🖨️ Cetak ({printMode === "invoice" ? "Invoice" : "Struk"})
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 text-xs font-semibold rounded-lg border dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="px-3 py-2 text-xs font-semibold rounded-lg border dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
               >
                 Tutup
               </button>
             </div>
           </div>
 
-          {/* ------------------- MODE 1: TAMPILAN INVOICE (A4) ------------------- */}
+          {/* ------------------- MODE 1: TAMPILAN INVOICE A4 ------------------- */}
           {printMode === "invoice" && (
             <div className="pt-6 space-y-6 print:pt-0">
-              {/* Header Invoice */}
               <div className="flex justify-between items-start">
                 <div>
-                  <img src="/images/logo/framelo-logo2.png" className="h-14 mb-1" alt="Framelo Logo" />
+                  <img src="/images/logo/framelo-logo2.png" className="h-12 mb-1" alt="Framelo Logo" />
                   <p className="text-xs text-gray-500">Custom 3D Map &amp; Frame Specialist</p>
                 </div>
                 <div className="text-right">
@@ -149,7 +173,6 @@ export default function InvoicePrintModal({ orders, isOpen, onClose }: InvoiceMo
 
               <hr className="border-gray-200 dark:border-gray-800" />
 
-              {/* Info Customer */}
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
                   <p className="font-semibold uppercase text-gray-400 text-[10px]">Ditujukan Kepada:</p>
@@ -159,15 +182,18 @@ export default function InvoicePrintModal({ orders, isOpen, onClose }: InvoiceMo
                 </div>
                 <div className="text-right">
                   <p className="font-semibold uppercase text-gray-400 text-[10px]">Detail Pesanan:</p>
-                  <p className="text-gray-700 dark:text-gray-300 mt-1">Sumber: <span className="font-medium">{mainOrder.order_source}</span></p>
-                  <p className="text-gray-700 dark:text-gray-300">Pengiriman: <span className="font-medium">{mainOrder.shipping_method || "JNE"}</span></p>
+                  <p className="text-gray-700 dark:text-gray-300 mt-1">
+                    Sumber: <span className="font-medium">{mainOrder.order_source}</span>
+                  </p>
+                  <p className="text-gray-700 dark:text-gray-300">
+                    Pengiriman: <span className="font-medium">{mainOrder.shipping_method || "JNE"}</span>
+                  </p>
                   <p className="mt-2 font-bold text-emerald-600">
                     {isAllPaidOff ? "STATUS: LUNAS" : "STATUS: BELUM LUNAS"}
                   </p>
                 </div>
               </div>
 
-              {/* Tabel Rincian */}
               <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-gray-50 dark:bg-gray-800/50 text-gray-500 border-b border-gray-200 dark:border-gray-800">
@@ -216,7 +242,6 @@ export default function InvoicePrintModal({ orders, isOpen, onClose }: InvoiceMo
                 </table>
               </div>
 
-              {/* Footer Calculation */}
               <div className="flex justify-end text-xs">
                 <div className="w-72 space-y-2 p-3 bg-gray-50 dark:bg-gray-800/40 rounded-xl">
                   <div className="flex justify-between text-gray-600 dark:text-gray-400">
@@ -257,98 +282,113 @@ export default function InvoicePrintModal({ orders, isOpen, onClose }: InvoiceMo
             </div>
           )}
 
-          {/* ------------------- MODE 2: TAMPILAN STRUK THERMAL ------------------- */}
+          {/* ------------------- MODE 2: TAMPILAN PREVIEW STRUK THERMAL ------------------- */}
           {printMode === "receipt" && (
-            <div className="pt-4 space-y-3 text-xs font-mono text-black dark:text-white print:pt-0 print:text-black print:bg-white">
-              {/* Header Struk */}
-              <div className="text-center space-y-0.5 border-b pb-3 border-dashed border-gray-400">
-                <h3 className="font-bold text-base tracking-widest uppercase">FRAMELO</h3>
-                <p className="text-[10px] text-gray-500">Custom 3D Map &amp; Frame</p>
-                <p className="text-[10px] text-gray-400">
-                  {new Date(mainOrder.created_at).toLocaleString("id-ID")}
-                </p>
-                <p className="text-[11px] font-bold mt-1">
-                  {orders.length > 1
-                    ? `#STRUK-GRP-${Date.now().toString().slice(-4)}`
-                    : `#${mainOrder.order_number}`}
-                </p>
-              </div>
-
-              {/* Info Pelanggan */}
-              <div className="border-b pb-2 border-dashed border-gray-400 text-[11px] space-y-0.5">
-                <p>Pelanggan : {mainOrder.customer_name}</p>
-                <p>No. WA    : {mainOrder.phone_number}</p>
-                <p>Kurir     : {mainOrder.shipping_method || "JNE"}</p>
-              </div>
-
-              {/* Daftar Rincian Barang */}
-              <div className="space-y-2 border-b pb-3 border-dashed border-gray-400 text-[11px]">
-                {orders.map((item, idx) => {
-                  const framePrice = Number(item.frame_price || 0);
-                  const addonsPrice = Number(item.addons_price || 0);
-                  const itemTotal = framePrice + addonsPrice;
-                  const hasAddons = item.add_ons && item.add_ons.length > 0;
-
-                  return (
-                    <div key={item.id || idx} className="space-y-0.5">
-                      <div className="flex justify-between font-bold">
-                        <span>{idx + 1}. {item.product_name}</span>
-                      </div>
-                      <div className="flex justify-between pl-3 text-gray-600">
-                        <span>• Bingkai</span>
-                        <span>{framePrice.toLocaleString("id-ID")}</span>
-                      </div>
-                      {hasAddons && (
-                        <div className="flex justify-between pl-3 text-gray-600">
-                          <span>• Addons ({item.add_ons.join(", ")})</span>
-                          <span>{addonsPrice.toLocaleString("id-ID")}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-semibold pl-3 pt-0.5">
-                        <span>Subtotal Item:</span>
-                        <span>Rp {itemTotal.toLocaleString("id-ID")}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Ringkasan Pembayaran */}
-              <div className="space-y-1 text-[11px] font-semibold border-b pb-3 border-dashed border-gray-400">
-                <div className="flex justify-between">
-                  <span>Subtotal ({orders.length} Item)</span>
-                  <span>Rp {totalFrameAndAddons.toLocaleString("id-ID")}</span>
+            <div className="pt-4 flex justify-center">
+              <div className="receipt-mode-print w-full max-w-[320px] p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 font-mono text-xs text-gray-800 dark:text-gray-200 space-y-3">
+                {/* Header Struk */}
+                <div className="text-center space-y-0.5 border-b pb-3 border-dashed border-gray-400 dark:border-gray-600">
+                  <h3 className="font-bold text-sm tracking-widest uppercase text-gray-900 dark:text-white">
+                    FRAMELO
+                  </h3>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">Custom 3D Map &amp; Frame</p>
+                  <p className="text-[10px] text-gray-400">
+                    {new Date(mainOrder.created_at).toLocaleString("id-ID")}
+                  </p>
+                  <p className="text-[11px] font-bold mt-1 text-gray-900 dark:text-white">
+                    {orders.length > 1
+                      ? `#STRUK-GRP-${Date.now().toString().slice(-4)}`
+                      : `#${mainOrder.order_number}`}
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span>Ongkir</span>
-                  <span>Rp {totalShipping.toLocaleString("id-ID")}</span>
-                </div>
-                {totalDiscount > 0 && (
-                  <div className="flex justify-between text-rose-600">
-                    <span>Diskon</span>
-                    <span>-Rp {totalDiscount.toLocaleString("id-ID")}</span>
+
+                {/* Info Pelanggan */}
+                <div className="border-b pb-2 border-dashed border-gray-400 dark:border-gray-600 text-[11px] space-y-0.5">
+                  <div className="flex justify-between">
+                    <span>Pelanggan :</span>
+                    <span className="font-semibold">{mainOrder.customer_name}</span>
                   </div>
-                )}
-                <div className="flex justify-between text-xs font-bold pt-1 border-t border-gray-300">
-                  <span>TOTAL</span>
-                  <span>Rp {grandTotalPrice.toLocaleString("id-ID")}</span>
+                  <div className="flex justify-between">
+                    <span>No. WA :</span>
+                    <span>{mainOrder.phone_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Kurir :</span>
+                    <span>{mainOrder.shipping_method || "JNE"}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between pt-0.5">
-                  <span>Terbayar</span>
-                  <span>Rp {totalPaid.toLocaleString("id-ID")}</span>
-                </div>
-                <div className="flex justify-between text-xs font-bold pt-1">
-                  <span>SISA</span>
-                  <span>Rp {remainingPayment.toLocaleString("id-ID")}</span>
-                </div>
-              </div>
 
-              {/* Status & Footer */}
-              <div className="text-center space-y-1 pt-1">
-                <p className="font-bold text-sm tracking-wider">
-                  *** {isAllPaidOff ? "LUNAS" : "BELUM LUNAS"} ***
-                </p>
-                <p className="text-[10px] text-gray-500">Terima kasih atas pesanan Anda!</p>
+                {/* Daftar Rincian Barang */}
+                <div className="space-y-2 border-b pb-3 border-dashed border-gray-400 dark:border-gray-600 text-[11px]">
+                  {orders.map((item, idx) => {
+                    const framePrice = Number(item.frame_price || 0);
+                    const addonsPrice = Number(item.addons_price || 0);
+                    const itemTotal = framePrice + addonsPrice;
+                    const hasAddons = item.add_ons && item.add_ons.length > 0;
+
+                    return (
+                      <div key={item.id || idx} className="space-y-0.5">
+                        <div className="font-bold text-gray-900 dark:text-white">
+                          {idx + 1}. {item.product_name}
+                        </div>
+                        <div className="flex justify-between pl-2 text-gray-600 dark:text-gray-400">
+                          <span> Bingkai</span>
+                          <span>{framePrice.toLocaleString("id-ID")}</span>
+                        </div>
+                        {hasAddons && (
+                          <div className="flex justify-between pl-2 text-gray-600 dark:text-gray-400">
+                            <span> Addons ({item.add_ons.join(", ")})</span>
+                            <span>{addonsPrice.toLocaleString("id-ID")}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-semibold pl-2 pt-0.5 text-gray-900 dark:text-white">
+                          <span>Subtotal:</span>
+                          <span>Rp {itemTotal.toLocaleString("id-ID")}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Ringkasan Pembayaran */}
+                <div className="space-y-1 text-[11px] font-medium border-b pb-3 border-dashed border-gray-400 dark:border-gray-600">
+                  <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span>Rp {totalFrameAndAddons.toLocaleString("id-ID")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Ongkir</span>
+                    <span>Rp {totalShipping.toLocaleString("id-ID")}</span>
+                  </div>
+                  {totalDiscount > 0 && (
+                    <div className="flex justify-between text-rose-500">
+                      <span>Diskon</span>
+                      <span>-Rp {totalDiscount.toLocaleString("id-ID")}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-[11.5px] font-bold pt-1 border-t border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white">
+                    <span>TOTAL</span>
+                    <span>Rp {grandTotalPrice.toLocaleString("id-ID")}</span>
+                  </div>
+                  <div className="flex justify-between pt-0.5">
+                    <span>Terbayar</span>
+                    <span>Rp {totalPaid.toLocaleString("id-ID")}</span>
+                  </div>
+                  <div className="flex justify-between text-[11.5px] font-bold pt-1 text-gray-900 dark:text-white">
+                    <span>SISA</span>
+                    <span className={remainingPayment <= 0 ? "text-emerald-500" : "text-rose-500"}>
+                      Rp {remainingPayment.toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Status & Footer */}
+                <div className="text-center space-y-0.5 pt-1">
+                  <p className="font-bold text-xs tracking-wider text-gray-900 dark:text-white">
+                    *** {isAllPaidOff ? "LUNAS" : "BELUM LUNAS"} ***
+                  </p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">Terima kasih atas pesanan Anda!</p>
+                </div>
               </div>
             </div>
           )}
