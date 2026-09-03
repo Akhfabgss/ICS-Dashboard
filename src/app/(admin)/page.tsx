@@ -243,16 +243,19 @@ export default function Home() {
               Lihat Semua
             </Link>
           </div>
+
+          {/* CONTAINER SCROLLING HORIZONTAL */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            {/* BERI LEBAR MINIMUM AGAR TRIGGER SCROLLING */}
+            <table className="w-full min-w-[650px] text-left text-sm">
               <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
                 <tr>
-                  <th className="p-3">ID Order</th>
-                  <th className="p-3">Pelanggan</th>
-                  <th className="p-3">No. Telp</th>
-                  <th className="p-3">Produk</th>
-                  {isOwnerOrBendahara && <th className="p-3">Total</th>}
-                  <th className="p-3">Status</th>
+                  <th className="p-3 whitespace-nowrap">ID Order</th>
+                  <th className="p-3 whitespace-nowrap">Pelanggan</th>
+                  <th className="p-3 whitespace-nowrap">No. Telp</th>
+                  <th className="p-3 whitespace-nowrap">Produk</th>
+                  {isOwnerOrBendahara && <th className="p-3 whitespace-nowrap">Total</th>}
+                  <th className="p-3 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -271,17 +274,18 @@ export default function Home() {
                 ) : (
                   recentOrders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
-                      <td className="p-3 font-medium text-gray-800 dark:text-white">{order.order_number}</td>
-                      <td className="p-3 text-gray-700 dark:text-gray-300">{order.customer_name}</td>
-                      <td className="p-3 text-gray-500">{order.phone_number}</td>
-                      <td className="p-3 text-gray-700 dark:text-gray-300">{order.product_name}</td>
+                      <td className="p-3 font-medium text-gray-800 dark:text-white whitespace-nowrap">{order.order_number}</td>
+                      <td className="p-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">{order.customer_name}</td>
+                      <td className="p-3 text-gray-500 whitespace-nowrap">{order.phone_number}</td>
+                      <td className="p-3 text-gray-700 dark:text-gray-300 min-w-[180px]">{order.product_name}</td>
                       {isOwnerOrBendahara && (
-                        <td className="p-3 font-semibold text-gray-800 dark:text-white">
+                        <td className="p-3 font-semibold text-gray-800 dark:text-white whitespace-nowrap">
                           Rp {order.total_price.toLocaleString("id-ID")}
                         </td>
                       )}
-                      <td className="p-3">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadge(order.status)}`}>
+                      <td className="p-3 whitespace-nowrap">
+                        {/* CEK TEKS TIDAK TERPOTONG DENGAN inline-block & whitespace-nowrap */}
+                        <span className={`inline-block whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadge(order.status)}`}>
                           {order.status}
                         </span>
                       </td>
