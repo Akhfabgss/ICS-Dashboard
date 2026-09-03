@@ -127,11 +127,9 @@ function PegawaiContent() {
                 })}
             </div>
 
-            {/* 3. TABEL PEGAWAI */}
-            <div className="rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
-                {/* Search Bar */}
-                <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Daftar Pegawai Aktif</h3>
+            {/* Search Bar */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
+                <div className="border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div className="relative w-full sm:w-72">
                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
@@ -143,7 +141,10 @@ function PegawaiContent() {
                         />
                     </div>
                 </div>
+            </div>
 
+            {/* 3. TABEL PEGAWAI */}
+            <div className="rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
                 {/* Tabel Data */}
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">

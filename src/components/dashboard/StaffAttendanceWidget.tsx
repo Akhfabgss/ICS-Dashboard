@@ -18,10 +18,10 @@ export default function StaffAttendanceWidget() {
     const fetchTodayAttendance = async () => {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session?.user) {
         setUserId(session.user.id);
-        
+
         // Fetch Profile Name
         const { data: profile } = await supabase
           .from("profiles")
@@ -71,7 +71,7 @@ export default function StaffAttendanceWidget() {
 
     const now = new Date();
     const todayStr = now.toISOString().split("T")[0];
-    
+
     // Tentukan status Terlambat jika masuk > jam 08:15
     const isLate = now.getHours() > 8 || (now.getHours() === 8 && now.getMinutes() > 15);
     const status = isLate ? "Terlambat" : "Hadir";
@@ -131,10 +131,6 @@ export default function StaffAttendanceWidget() {
           <p className="text-xs text-gray-400">
             {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "short" })}
           </p>
-          <div className="flex items-center justify-end gap-1 text-sm font-bold text-gray-700 dark:text-gray-200 mt-0.5">
-            <Clock className="w-4 h-4 text-brand-500" />
-            <span>08:00 WIB</span>
-          </div>
         </div>
       </div>
 
@@ -191,8 +187,8 @@ export default function StaffAttendanceWidget() {
       {/* Riwayat Shift Ringkas */}
       <div className="text-xs space-y-2 pt-2 border-t dark:border-gray-800">
         <div className="flex justify-between text-gray-600 dark:text-gray-400">
-          <span>Jam Shift Standar:</span>
-          <span className="font-semibold text-gray-800 dark:text-gray-200">08:00 - 17:00 WIB</span>
+          <span>Jam Kerja Standar:</span>
+          <span className="font-semibold text-gray-800 dark:text-gray-200">8 Jam</span>
         </div>
         <div className="flex justify-between text-gray-600 dark:text-gray-400">
           <span>Status Pulang:</span>

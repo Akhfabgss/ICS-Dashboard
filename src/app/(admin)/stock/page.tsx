@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
 import { InventoryItem } from "@/types/inventory";
 import InventoryFormModal from "@/components/inventory/InventoryFormModal";
-import { AlertTriangle, PackageCheck } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 interface StockSummary {
   name: string;
@@ -127,7 +127,7 @@ export default function InventoryPage() {
             setItemToEdit(null);
             setIsFormOpen(true);
           }}
-          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors"
+          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors cursor-pointer"
         >
           + Catat Barang Masuk / Keluar
         </button>
@@ -189,14 +189,16 @@ export default function InventoryPage() {
 
       {/* FILTER & SEARCH BARS */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
-        <div className="flex gap-2">
+
+        {/* DESIGN FILTER CATEGORY MIRIP FINANCE PAGE */}
+        <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-medium dark:bg-gray-800">
           {["Semua", "Bingkai", "Packing", "Merchandise"].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${selectedCategory === cat
-                ? "bg-brand-500 text-white"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200"
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${selectedCategory === cat
+                ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
+                : "text-gray-500"
                 }`}
             >
               {cat}
@@ -209,7 +211,7 @@ export default function InventoryPage() {
           placeholder="Cari nama barang..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs outline-none focus:border-brand-500"
+          className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-xs outline-none focus:border-brand-500 dark:text-white"
         />
       </div>
 
@@ -278,13 +280,13 @@ export default function InventoryPage() {
                             setItemToEdit(item.latestItem);
                             setIsFormOpen(true);
                           }}
-                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 cursor-pointer"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(item.latestItem.id, item.name)}
-                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                          className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 cursor-pointer"
                         >
                           Hapus
                         </button>

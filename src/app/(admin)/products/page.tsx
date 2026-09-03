@@ -309,16 +309,16 @@ function ProductContent() {
         </button>
       </div>
 
-      {/* FILTER BUTTONS & SEARCH INPUT */}
+      {/* FILTER BUTTONS & SEARCH INPUT (SESUAI STYLE FINANCE & STOCK) */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
-        <div className="flex gap-2">
+        <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-medium dark:bg-gray-800">
           {["Semua", "Produk Frame", "Tambahan / Add-ons"].map((tab) => (
             <button
               key={tab}
               onClick={() => setSelectedType(tab)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${selectedType === tab
-                  ? "bg-brand-500 text-white"
-                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200"
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${selectedType === tab
+                  ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
+                  : "text-gray-500"
                 }`}
             >
               {tab}
@@ -331,7 +331,7 @@ function ProductContent() {
           placeholder="Cari nama produk / add-on..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs outline-none focus:border-brand-500"
+          className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-xs outline-none focus:border-brand-500 dark:text-white"
         />
       </div>
 
@@ -385,7 +385,6 @@ function ProductContent() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        {/* TOMBOL ATUR RESEP BAHAN (STEP 4) */}
                         <button
                           onClick={() => handleOpenRecipeModal(item)}
                           className="px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-pointer"
