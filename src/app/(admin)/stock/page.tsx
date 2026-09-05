@@ -109,7 +109,7 @@ export default function InventoryPage() {
           .includes(searchQuery.toLowerCase());
         return matchCategory && matchSearch;
       })
-      .sort((a, b) => a.name.localeCompare(b.name, "id", { sensitivity: "base" })); // URUT ABJAD A-Z
+      .sort((a, b) => a.name.localeCompare(b.name, "id", { sensitivity: "base" }));
   }, [stockSummaryList, selectedCategory, searchQuery]);
 
   return (
@@ -159,10 +159,10 @@ export default function InventoryPage() {
                       {item.category}
                     </span>
                     <span
-                      className={`text-xs font-bold whitespace-nowrap ${item.remaining <= 5 ? "text-rose-500" : "text-emerald-500"
+                      className={`text-xs font-bold whitespace-nowrap ${item.remaining <= 10 ? "text-rose-500" : "text-emerald-500"
                         }`}
                     >
-                      {item.remaining <= 5 ? "Stok Menipis" : "Tersedia"}
+                      {item.remaining <= 10 ? "Stok Menipis" : "Tersedia"}
                     </span>
                   </div>
 
@@ -177,7 +177,7 @@ export default function InventoryPage() {
                 <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-800 flex justify-between items-baseline">
                   <span className="text-xs text-gray-400">Total Sisa:</span>
                   <span
-                    className={`text-lg font-bold ${item.remaining <= 5 ? "text-rose-500" : "text-brand-600 dark:text-brand-400"
+                    className={`text-lg font-bold ${item.remaining <= 10 ? "text-rose-500" : "text-brand-600 dark:text-brand-400"
                       }`}
                   >
                     {item.remaining} Pcs
@@ -197,8 +197,8 @@ export default function InventoryPage() {
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${selectedCategory === cat
-                ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
-                : "text-gray-500"
+                  ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
+                  : "text-gray-500"
                 }`}
             >
               {cat}
@@ -265,12 +265,12 @@ export default function InventoryPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span
-                        className={`inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full ${item.remaining <= 5
-                          ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
-                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                        className={`inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full ${item.remaining <= 10
+                            ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                           }`}
                       >
-                        {item.remaining <= 5 ? "Stok Menipis" : "Aman"}
+                        {item.remaining <= 10 ? "Stok Menipis" : "Aman"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">

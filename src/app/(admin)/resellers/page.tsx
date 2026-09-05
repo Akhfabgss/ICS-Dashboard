@@ -5,8 +5,9 @@ import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
 import { ResellerOrder, ResellerStatus } from "@/types/reseller";
 import ResellerFormModal from "@/components/reseller/ResellerFormModal";
-import { Users, DollarSign, Clock, CheckCircle2 } from "lucide-react";
+import { Users } from "lucide-react";
 import RoleGuard from "@/components/auth/RoleGuard";
+
 export default function ResellerPage() {
   return (
     <RoleGuard allowedRoles={["Owner"]}>
@@ -57,7 +58,9 @@ export default function ResellerPage() {
     const stats = useMemo(() => {
       const total = resellerOrders.length;
       const completed = resellerOrders.filter((r) => r.status === "Selesai").length;
-      const inProgress = resellerOrders.filter((r) => r.status === "Proses Design" || r.status === "Pengerjaan").length;
+      const inProgress = resellerOrders.filter(
+        (r) => r.status === "Proses Design" || r.status === "Pengerjaan" || r.status === "Pending" || r.status === "Dalam Daftar"
+      ).length;
       const totalCommission = resellerOrders.reduce((acc, curr) => acc + Number(curr.commission || 0), 0);
 
       return { total, completed, inProgress, totalCommission };
@@ -133,6 +136,10 @@ export default function ResellerPage() {
 
     const getStatusBadge = (status: ResellerStatus) => {
       switch (status) {
+        case "Dalam Daftar":
+          return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+        case "Pending":
+          return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
         case "Proses Design":
           return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
         case "Pengerjaan":
@@ -166,7 +173,7 @@ export default function ResellerPage() {
               setItemToEdit(null);
               setIsModalOpen(true);
             }}
-            className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors inline-block"
+            className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors inline-block cursor-pointer"
           >
             + Catat Order Reseller Baru
           </button>
@@ -179,23 +186,17 @@ export default function ResellerPage() {
             <h3 className="mt-1 text-2xl font-bold text-gray-800 dark:text-white">{stats.total} Pesanan</h3>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <span className="text-xs font-medium uppercase text-gray-400">
-              Dalam Proses
-            </span>
+            <span className="text-xs font-medium uppercase text-gray-400">Dalam Proses</span>
             <h3 className="mt-1 text-2xl font-bold text-amber-500">{stats.inProgress} Pesanan</h3>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-            <span className="text-xs font-medium uppercase text-gray-400">
-              Selesai
-            </span>
+            <span className="text-xs font-medium uppercase text-gray-400">Selesai</span>
             <h3 className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.completed} Pesanan</h3>
           </div>
 
           {isFinanceVisible ? (
             <div className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
-              <span className="text-xs font-medium uppercase text-gray-400">
-                Total Komisi
-              </span>
+              <span className="text-xs font-medium uppercase text-gray-400">Total Komisi</span>
               <h3 className="mt-1 text-2xl font-bold text-brand-600 dark:text-brand-400">
                 Rp {stats.totalCommission.toLocaleString("id-ID")}
               </h3>
@@ -283,10 +284,12 @@ export default function ResellerPage() {
                         <select
                           value={item.status}
                           onChange={(e) => updateStatus(item.id, e.target.value as ResellerStatus)}
-                          className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border-0 focus:ring-2 focus:ring-brand-500 ${getStatusBadge(
+                          className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border-0 focus:ring-2 focus:ring-brand-500 cursor-pointer ${getStatusBadge(
                             item.status
                           )}`}
                         >
+                          <option value="Dalam Daftar">Dalam Daftar</option>
+                          <option value="Pending">Pending</option>
                           <option value="Proses Design">Proses Design</option>
                           <option value="Pengerjaan">Pengerjaan</option>
                           <option value="Pengiriman">Pengiriman</option>
@@ -302,13 +305,13 @@ export default function ResellerPage() {
                               setItemToEdit(item);
                               setIsModalOpen(true);
                             }}
-                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors cursor-pointer"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDelete(item.id, item.customer_name)}
-                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors"
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer"
                           >
                             Hapus
                           </button>

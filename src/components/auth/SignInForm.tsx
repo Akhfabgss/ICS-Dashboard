@@ -56,7 +56,7 @@ export default function SignInForm() {
 
   return (
     /* PERBAIKAN: Gunakan 'fixed inset-0 z-50' agar warna indigo menutup penuh seluruh layar */
-    <div className="fixed inset-0 z-50 overflow-y-auto w-full bg-gradient-to-br from-indigo-600 via-indigo-500 to-indigo-700 grid grid-cols-1 lg:grid-cols-12">
+    <div className="fixed inset-0 z-50 overflow-y-auto w-full bg-gray-800 grid grid-cols-1 lg:grid-cols-12">
 
       {/* SISI KIRI: BRANDING */}
       <div className="hidden md:flex"></div>

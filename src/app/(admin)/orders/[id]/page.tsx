@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Order } from "@/types/order";
 import { UserProfile } from "@/types/users";
 import Swal from "sweetalert2";
-import { ArrowLeft, Trash2, Edit } from "lucide-react";
+import { ArrowLeft, Trash2, Edit, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 export default function OrderDetailPage() {
@@ -59,7 +59,6 @@ export default function OrderDetailPage() {
         if (orderId) fetchOrderDetail();
     }, [orderId]);
 
-    // Kebal terhadap huruf besar/kecil & spasi
     const normalizedRole = (userRole || "").toLowerCase().trim();
     const isFinanceVisible = normalizedRole !== "staff" && normalizedRole !== "designer" && normalizedRole !== "";
 
@@ -106,7 +105,7 @@ export default function OrderDetailPage() {
                     <button
                         type="button"
                         onClick={() => router.back()}
-                        className="p-2 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        className="p-2 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                     >
                         <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
                     </button>
@@ -122,7 +121,7 @@ export default function OrderDetailPage() {
                 <div className="flex gap-2">
                     <Link
                         href={`/orders/edit/${order.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 transition-colors cursor-pointer"
                     >
                         <Edit className="w-4 h-4" />
                         Edit Pesanan
@@ -130,7 +129,7 @@ export default function OrderDetailPage() {
                     <button
                         type="button"
                         onClick={handleDelete}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 transition-colors cursor-pointer"
                     >
                         <Trash2 className="w-4 h-4" />
                         Hapus Pesanan
@@ -140,22 +139,28 @@ export default function OrderDetailPage() {
 
             {/* 1. INFORMASI PEMESAN */}
             <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                <h3 className="font-bold text-gray-800 dark:text-white text-base">1. Data Pemesan</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <h3 className="font-bold text-gray-800 dark:text-white text-base">1. Data Pemesan &amp; Pengiriman</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
                     <div>
-                        <span className="text-sm text-gray-400 font-medium block">Nama Pemesan</span>
+                        <span className="text-xs text-gray-400 font-medium block">Nama Pemesan</span>
                         <p className="font-semibold text-gray-800 dark:text-white">{order.customer_name}</p>
                     </div>
                     <div>
-                        <span className="text-sm text-gray-400 font-medium block">No. WhatsApp / HP</span>
+                        <span className="text-xs text-gray-400 font-medium block">No. WhatsApp / HP</span>
                         <p className="font-semibold text-gray-800 dark:text-white">{order.phone_number}</p>
                     </div>
                     <div>
-                        <span className="text-sm text-gray-400 font-medium block">Dikerjakan Oleh</span>
+                        <span className="text-xs text-gray-400 font-medium block">Tipe / Kurir Pengiriman</span>
+                        <span className="inline-block mt-0.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                            {order.shipping_method || "JNE"}
+                        </span>
+                    </div>
+                    <div>
+                        <span className="text-xs text-gray-400 font-medium block">Dikerjakan Oleh</span>
                         <p className="font-semibold text-gray-800 dark:text-white">{getAssigneeName(order.assigned_to)}</p>
                     </div>
                     <div className="sm:col-span-2">
-                        <span className="text-sm text-gray-400 font-medium block">Alamat Pengiriman</span>
+                        <span className="text-xs text-gray-400 font-medium block">Alamat Pengiriman</span>
                         <p className="text-gray-700 dark:text-gray-300">{order.address || "-"}</p>
                     </div>
                 </div>
@@ -166,24 +171,24 @@ export default function OrderDetailPage() {
                 <h3 className="font-bold text-gray-800 dark:text-white text-base">2. Rincian Item Pesanan</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                     <div>
-                        <span className="text-sm text-gray-400 block">Kategori Desain</span>
+                        <span className="text-xs text-gray-400 block">Kategori Desain</span>
                         <p className="font-bold text-purple-600 dark:text-purple-400 text-base">{order.category || "PENDAKIAN"}</p>
                     </div>
                     <div>
-                        <span className="text-sm text-gray-400 block">Produk Utama</span>
+                        <span className="text-xs text-gray-400 block">Produk Utama</span>
                         <p className="font-semibold text-brand-600 dark:text-brand-400 text-base">{order.product_name}</p>
                     </div>
                     <div>
-                        <span className="text-sm text-gray-400 block">Sumber Order</span>
+                        <span className="text-xs text-gray-400 block">Sumber Order</span>
                         <p className="font-medium text-gray-800 dark:text-white">{order.order_source}</p>
                     </div>
                 </div>
                 <div>
-                    <span className="text-sm text-gray-400 block mb-2">Tambahan / Add-ons</span>
+                    <span className="text-xs text-gray-400 block mb-2">Tambahan / Add-ons</span>
                     <div className="flex flex-wrap gap-2">
                         {order.add_ons && order.add_ons.length > 0 ? (
                             order.add_ons.map((addon, idx) => (
-                                <span key={idx} className="px-3 py-1 text-sm font-semibold rounded-full bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
+                                <span key={idx} className="px-3 py-1 text-xs font-semibold rounded-full bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
                                     {addon}
                                 </span>
                             ))
@@ -194,7 +199,7 @@ export default function OrderDetailPage() {
                 </div>
             </div>
 
-            {/* 3. RINCIAN KEUANGAN — hanya untuk Owner/Bendahara */}
+            {/* 3. RINCIAN KEUANGAN */}
             {isFinanceVisible && (
                 <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-xs">
                     <h3 className="font-bold text-gray-800 dark:text-white text-base mb-2">3. Ringkasan Pembayaran</h3>
@@ -210,9 +215,9 @@ export default function OrderDetailPage() {
                         <span>Ongkir:</span>
                         <span>Rp {Number(order.shipping_fee || 0).toLocaleString("id-ID")}</span>
                     </div>
-                    {Number(order.discount_percent || 0) > 0 && (
+                    {Number(order.discount_amount || 0) > 0 && (
                         <div className="flex justify-between text-sm text-rose-500 font-medium">
-                            <span>Diskon ({order.discount_percent}%):</span>
+                            <span>Diskon (Potongan):</span>
                             <span>- Rp {Number(order.discount_amount || 0).toLocaleString("id-ID")}</span>
                         </div>
                     )}
@@ -246,14 +251,31 @@ export default function OrderDetailPage() {
                             if (Array.isArray(parsed)) {
                                 const filled = parsed.filter((item) => item.value && item.value.trim() !== "");
                                 if (filled.length === 0) return <p className="text-sm text-gray-400 italic">Belum ada data desain yang diisi.</p>;
+
                                 return (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                                        {filled.map((field, idx) => (
-                                            <div key={idx} className="flex flex-col p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-                                                <span className="text-[10px] uppercase font-bold text-gray-400">{field.key || "Custom"}</span>
-                                                <span className="font-semibold text-gray-800 dark:text-gray-200 mt-0.5 break-words">{field.value}</span>
-                                            </div>
-                                        ))}
+                                        {filled.map((field, idx) => {
+                                            const isUrl = field.value.startsWith("http://") || field.value.startsWith("https://");
+
+                                            return (
+                                                <div key={idx} className="flex flex-col p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+                                                    <span className="text-[10px] uppercase font-bold text-gray-400">{field.key || "Custom"}</span>
+                                                    {isUrl ? (
+                                                        <a
+                                                            href={field.value}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="font-semibold text-brand-600 dark:text-brand-400 hover:underline mt-0.5 break-all inline-flex items-center gap-1 text-xs"
+                                                        >
+                                                            <span>Buka Tautan</span>
+                                                            <ExternalLink className="w-3 h-3" />
+                                                        </a>
+                                                    ) : (
+                                                        <span className="font-semibold text-gray-800 dark:text-gray-200 mt-0.5 break-words">{field.value}</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 );
                             }

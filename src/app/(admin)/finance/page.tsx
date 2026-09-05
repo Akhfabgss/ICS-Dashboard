@@ -543,7 +543,6 @@ function FinanceContent() {
                     <>
                       <option value="Pemasukan Lainnya">Pemasukan Lainnya</option>
                       <option value="Modal Usaha / Investor">Modal Usaha / Investor</option>
-                      <option value="Penjualan Non-Order">Penjualan Non-Order</option>
                     </>
                   )}
                 </select>

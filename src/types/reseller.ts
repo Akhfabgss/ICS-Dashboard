@@ -1,4 +1,11 @@
-export type ResellerStatus = "Proses Design" | "Pengerjaan" | "Pengiriman" | "Selesai" | "Trouble";
+export type ResellerStatus =
+  | "Dalam Daftar"
+  | "Pending"
+  | "Proses Design"
+  | "Pengerjaan"
+  | "Pengiriman"
+  | "Selesai"
+  | "Trouble";
 
 export interface ResellerOrder {
   id: string;

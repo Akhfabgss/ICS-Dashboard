@@ -1,9 +1,18 @@
 "use client";
 import { useTheme } from "@/context/ThemeContext";
+import { usePathname } from "next/navigation"; // 1. Import usePathname
 import React from "react";
 
 export default function ThemeTogglerTwo() {
   const { toggleTheme } = useTheme();
+  const pathname = usePathname(); // 2. Ambil rute halaman saat ini
+
+  // 3. Jika sedang di halaman signin, jangan render apa-apa (sembunyikan)
+  // Sesuaikan url "/signin" dengan rute halaman login kamu jika berbeda (misal: "/login")
+  if (pathname === "/signin" || pathname === "/login") {
+    return null;
+  }
+
   return (
     <button
       onClick={toggleTheme}

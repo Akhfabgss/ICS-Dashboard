@@ -36,7 +36,9 @@ export default function ResellerFormModal({
   const [customerName, setCustomerName] = useState("");
   const [frameType, setFrameType] = useState("");
   const [commission, setCommission] = useState<number>(0);
-  const [status, setStatus] = useState<ResellerStatus>("Proses Design");
+
+  // DEFAULT STATUS DISIMPANG KE "Dalam Daftar"
+  const [status, setStatus] = useState<ResellerStatus>("Dalam Daftar");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export default function ResellerFormModal({
       setCustomerName(itemToEdit.customer_name || "");
       setFrameType(itemToEdit.frame_type || "");
       setCommission(Number(itemToEdit.commission || 0));
-      setStatus(itemToEdit.status || "Proses Design");
+      setStatus(itemToEdit.status || "Dalam Daftar");
       setNotes(itemToEdit.notes || "");
     } else {
       setOrderDate(new Date().toISOString().split("T")[0]);
@@ -67,7 +69,7 @@ export default function ResellerFormModal({
       setCustomerName("");
       setFrameType("");
       setCommission(0);
-      setStatus("Proses Design");
+      setStatus("Dalam Daftar");
       setNotes("");
     }
   }, [itemToEdit, isOpen]);
@@ -95,14 +97,12 @@ export default function ResellerFormModal({
     let error = null;
 
     if (itemToEdit) {
-      // Cukup update tabel reseller, trigger DB akan otomatis update tabel finances
       const { error: err } = await supabase
         .from("resellers")
         .update(payload)
         .eq("id", itemToEdit.id);
       error = err;
     } else {
-      // Cukup insert tabel reseller, trigger DB akan otomatis insert ke tabel finances
       const { error: err } = await supabase
         .from("resellers")
         .insert([payload]);
@@ -116,8 +116,7 @@ export default function ResellerFormModal({
     } else {
       Swal.fire(
         "Berhasil!",
-        `Data order reseller & pengeluaran komisi berhasil ${itemToEdit ? "diperbarui" : "dicatat"
-        }.`,
+        `Data order reseller & pengeluaran komisi berhasil ${itemToEdit ? "diperbarui" : "dicatat"}.`,
         "success"
       );
       onSuccess();
@@ -135,7 +134,7 @@ export default function ResellerFormModal({
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg"
+            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -198,7 +197,7 @@ export default function ResellerFormModal({
               required
               value={frameType}
               onChange={(e) => setFrameType(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium"
+              className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium cursor-pointer"
             >
               <option value="">— Pilih Produk Bingkai —</option>
               {productList.map((p) => (
@@ -228,8 +227,10 @@ export default function ResellerFormModal({
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ResellerStatus)}
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium"
+                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium cursor-pointer"
               >
+                <option value="Dalam Daftar">Dalam Daftar</option>
+                <option value="Pending">Pending</option>
                 <option value="Proses Design">Proses Design</option>
                 <option value="Pengerjaan">Pengerjaan</option>
                 <option value="Pengiriman">Pengiriman</option>
@@ -254,14 +255,14 @@ export default function ResellerFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+              className="px-5 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2.5 rounded-xl bg-brand-500 text-white font-semibold hover:bg-brand-600 disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl bg-brand-500 text-white font-semibold hover:bg-brand-600 disabled:opacity-50 cursor-pointer"
             >
               {submitting ? "Menyimpan..." : "Simpan Data"}
             </button>
