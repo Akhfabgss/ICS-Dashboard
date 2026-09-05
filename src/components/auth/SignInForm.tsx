@@ -164,12 +164,12 @@ export default function SignInForm() {
                   Keep me logged in
                 </span>
               </div>
-              <Link
+              {/* <Link
                 href="/reset-password"
                 className="font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline"
               >
                 Forgot password?
-              </Link>
+              </Link> */}
             </div>
 
             {/* Submit Button */}
