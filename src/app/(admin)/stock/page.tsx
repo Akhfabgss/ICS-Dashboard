@@ -137,11 +137,6 @@ export default function InventoryPage() {
 
       {/* 4 CARD STOK PALING MENIPIS */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-rose-500" />
-          4 Barang Stok Paling Menipis
-        </h2>
-
         {topCriticalItems.length === 0 ? (
           <div className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-center text-xs text-gray-400">
             Belum ada data barang.
@@ -197,8 +192,8 @@ export default function InventoryPage() {
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${selectedCategory === cat
-                  ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
-                  : "text-gray-500"
+                ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
+                : "text-gray-500"
                 }`}
             >
               {cat}
@@ -266,8 +261,8 @@ export default function InventoryPage() {
                     <td className="px-4 py-3 text-center">
                       <span
                         className={`inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full ${item.remaining <= 10
-                            ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
-                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                          ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                           }`}
                       >
                         {item.remaining <= 10 ? "Stok Menipis" : "Aman"}
