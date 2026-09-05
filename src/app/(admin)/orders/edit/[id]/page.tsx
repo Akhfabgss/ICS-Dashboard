@@ -355,11 +355,11 @@ export default function EditOrderPage() {
     };
 
     if (loading) {
-        return <div className="p-6 text-center text-gray-500">Memuat data pesanan...</div>;
+        return <div className="p-6 text-center text-gray-500 dark:text-gray-400">Memuat data pesanan...</div>;
     }
 
     return (
-        <div className="mx-auto space-y-6 pb-12 p-4 sm:p-6">
+        <div className="mx-auto space-y-6 pb-12 p-4 sm:p-6 text-gray-900 dark:text-gray-100">
             {/* HEADER */}
             <div className="flex items-center gap-3">
                 <button
@@ -367,7 +367,7 @@ export default function EditOrderPage() {
                     onClick={() => router.back()}
                     className="p-2 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                 >
-                    <ArrowLeft className="w-5 h-5" />
+                    <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-200" />
                 </button>
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Edit Pesanan ({orderNumber})</h1>
@@ -381,31 +381,31 @@ export default function EditOrderPage() {
                     <h3 className="font-bold text-gray-800 dark:text-white text-base">1. Informasi Pemesan</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1">Nama Pemesan *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">Nama Pemesan *</label>
                             <input
                                 type="text"
                                 required
                                 value={customerName}
                                 onChange={(e) => setCustomerName(e.target.value)}
-                                className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 outline-none focus:border-brand-500"
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500"
                             />
                         </div>
                         <div>
-                            <label className="block font-medium mb-1">No. WhatsApp *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">No. WhatsApp *</label>
                             <input
                                 type="text"
                                 required
                                 value={phoneNumber}
                                 onChange={(e) => setPhoneNumber(e.target.value)}
-                                className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 outline-none focus:border-brand-500"
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500"
                             />
                         </div>
                         <div>
-                            <label className="block font-medium mb-1">Dikerjakan Oleh</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">Dikerjakan Oleh</label>
                             <select
                                 value={assignedTo}
                                 onChange={(e) => setAssignedTo(e.target.value)}
-                                className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 dark:bg-gray-900 outline-none focus:border-brand-500"
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 cursor-pointer"
                             >
                                 <option value="">— Belum Ditugaskan —</option>
                                 {staffList.map((s) => (
@@ -418,20 +418,20 @@ export default function EditOrderPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1">Alamat Pengiriman</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">Alamat Pengiriman</label>
                             <textarea
                                 rows={2}
                                 value={address}
                                 onChange={(e) => setAddress(e.target.value)}
-                                className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 outline-none focus:border-brand-500"
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500"
                             />
                         </div>
                         <div>
-                            <label className="block font-medium mb-1">Tipe / Kurir Pengiriman *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">Tipe / Kurir Pengiriman *</label>
                             <select
                                 value={shippingMethod}
                                 onChange={(e) => setShippingMethod(e.target.value)}
-                                className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 dark:bg-gray-900 outline-none focus:border-brand-500 font-medium"
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-medium cursor-pointer"
                             >
                                 <option value="JNE">JNE</option>
                                 <option value="J&T">J&amp;T Express</option>
@@ -448,11 +448,11 @@ export default function EditOrderPage() {
                     <h3 className="font-bold text-gray-800 dark:text-white text-base">2. Pilihan Produk &amp; Add-ons</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1">Kategori Desain *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">Kategori Desain *</label>
                             <select
                                 value={category}
                                 onChange={(e) => setCategory(e.target.value)}
-                                className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 dark:bg-gray-900 outline-none focus:border-brand-500 font-medium"
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-medium cursor-pointer"
                             >
                                 <option value="PENDAKIAN">PENDAKIAN (P)</option>
                                 <option value="RUNNING">RUNNING (R)</option>
@@ -462,11 +462,11 @@ export default function EditOrderPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block font-medium mb-1">Pilih Produk Frame *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">Pilih Produk Frame *</label>
                             <select
                                 value={productName}
                                 onChange={(e) => handleProductSelect(e.target.value)}
-                                className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 dark:bg-gray-900 outline-none focus:border-brand-500 font-medium"
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-medium cursor-pointer"
                             >
                                 {productList.map((p) => (
                                     <option key={p.id} value={p.name}>
@@ -476,11 +476,11 @@ export default function EditOrderPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block font-medium mb-1">Order Lewat *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">Order Lewat *</label>
                             <select
                                 value={orderSource}
                                 onChange={(e) => setOrderSource(e.target.value)}
-                                className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 dark:bg-gray-900 outline-none focus:border-brand-500"
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 cursor-pointer"
                             >
                                 <option value="WhatsApp">WhatsApp</option>
                                 <option value="Instagram">Instagram</option>
@@ -491,7 +491,7 @@ export default function EditOrderPage() {
                         </div>
                     </div>
                     <div>
-                        <label className="block font-medium mb-2 text-sm">Pilih Tambahan / Add-ons</label>
+                        <label className="block font-medium mb-2 text-sm dark:text-gray-200">Pilih Tambahan / Add-ons</label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {addonList.map((item) => {
                                 const isPhotoAddon = item.name.toLowerCase().includes("foto");
@@ -505,12 +505,12 @@ export default function EditOrderPage() {
                                                     : "border-gray-200 dark:border-gray-800"
                                                 }`}
                                         >
-                                            <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium">
+                                            <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium dark:text-gray-200">
                                                 <input
                                                     type="checkbox"
                                                     checked={isExtraPhotoChecked}
                                                     onChange={() => setIsExtraPhotoChecked(!isExtraPhotoChecked)}
-                                                    className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4"
+                                                    className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                                                 />
                                                 <span>Tambah foto</span>
                                             </label>
@@ -522,7 +522,7 @@ export default function EditOrderPage() {
                                                         min="1"
                                                         value={extraPhotoCount}
                                                         onChange={(e) => setExtraPhotoCount(Math.max(1, Number(e.target.value)))}
-                                                        className="w-20 rounded-lg border px-2 py-1 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 outline-none focus:border-brand-500 font-bold"
+                                                        className="w-20 rounded-lg border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-bold"
                                                     />
                                                     <span className="text-xs text-gray-500 dark:text-gray-400">
                                                         foto {isFinanceVisible && ` (+Rp ${extraPhotoPrice.toLocaleString("id-ID")})`}
@@ -537,15 +537,15 @@ export default function EditOrderPage() {
                                     <label
                                         key={item.id}
                                         className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-sm transition-colors ${selectedAddons.includes(item.name)
-                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium"
-                                                : "border-gray-200 dark:border-gray-800"
+                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium dark:text-white"
+                                                : "border-gray-200 dark:border-gray-800 dark:text-gray-300"
                                             }`}
                                     >
                                         <input
                                             type="checkbox"
                                             checked={selectedAddons.includes(item.name)}
                                             onChange={() => toggleAddon(item.name)}
-                                            className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4"
+                                            className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                                         />
                                         <span>
                                             {item.name} {isFinanceVisible ? `(+Rp ${item.price.toLocaleString("id-ID")})` : ""}
@@ -563,61 +563,61 @@ export default function EditOrderPage() {
                         <h3 className="font-bold text-gray-800 dark:text-white text-base">3. Rincian Pembayaran</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             <div>
-                                <label className="block font-medium mb-1">Harga Frame (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">Harga Frame (Rp)</label>
                                 <input
                                     type="number"
                                     value={framePrice}
                                     onChange={(e) => setFramePrice(Number(e.target.value))}
-                                    className="w-full rounded-xl border p-2.5 bg-transparent font-bold text-brand-600 dark:text-brand-400 dark:border-gray-700"
+                                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 p-2.5 bg-transparent font-bold text-brand-600 dark:text-brand-400 outline-none"
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1">Ongkir (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">Ongkir (Rp)</label>
                                 <input
                                     type="number"
                                     value={shippingFee}
                                     onChange={(e) => setShippingFee(Number(e.target.value))}
                                     placeholder="0"
-                                    className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700"
+                                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 p-2.5 bg-transparent text-gray-900 dark:text-white outline-none"
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1">Diskon (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">Diskon (Rp)</label>
                                 <input
                                     type="number"
                                     value={discountAmount}
                                     onChange={(e) => setDiscountAmount(Number(e.target.value))}
                                     placeholder="0"
-                                    className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700 text-rose-500 font-semibold"
+                                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 p-2.5 bg-transparent text-rose-500 font-semibold outline-none"
                                 />
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm pt-2">
                             <div>
-                                <label className="block font-medium mb-1">Bayar DP (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">Bayar DP (Rp)</label>
                                 <input
                                     type="number"
                                     value={dpAmount}
                                     onChange={(e) => setDpAmount(Number(e.target.value))}
-                                    className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700"
+                                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 p-2.5 bg-transparent text-gray-900 dark:text-white outline-none"
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1">Pelunasan (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">Pelunasan (Rp)</label>
                                 <input
                                     type="number"
                                     value={repaymentAmount}
                                     onChange={(e) => setRepaymentAmount(Number(e.target.value))}
-                                    className="w-full rounded-xl border p-2.5 bg-transparent dark:border-gray-700"
+                                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 p-2.5 bg-transparent text-gray-900 dark:text-white outline-none"
                                 />
                             </div>
                         </div>
                         <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex justify-between text-sm font-semibold">
-                            <span>
+                            <span className="text-gray-800 dark:text-gray-200">
                                 Total Harga: Rp {totalPrice.toLocaleString("id-ID")}
                                 {discountAmount > 0 && ` (Potongan Rp ${discountAmount.toLocaleString("id-ID")})`}
                             </span>
-                            <span className={remainingPayment <= 0 ? "text-emerald-500" : "text-rose-500"}>
+                            <span className={remainingPayment <= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}>
                                 Sisa: Rp {remainingPayment.toLocaleString("id-ID")} ({remainingPayment <= 0 ? "LUNAS" : "BELUM LUNAS"})
                             </span>
                         </div>
@@ -650,7 +650,7 @@ export default function EditOrderPage() {
                                         u[index].key = e.target.value;
                                         setDesignFields(u);
                                     }}
-                                    className="w-1/3 rounded-xl border p-2 text-sm bg-transparent dark:border-gray-700 font-semibold"
+                                    className="w-1/3 rounded-xl border border-gray-300 dark:border-gray-700 p-2 text-sm bg-transparent text-gray-900 dark:text-white font-semibold"
                                 />
                                 <input
                                     type="text"
@@ -661,7 +661,7 @@ export default function EditOrderPage() {
                                         u[index].value = e.target.value;
                                         setDesignFields(u);
                                     }}
-                                    className="flex-1 rounded-xl border p-2 text-sm bg-transparent dark:border-gray-700"
+                                    className="flex-1 rounded-xl border border-gray-300 dark:border-gray-700 p-2 text-sm bg-transparent text-gray-900 dark:text-white"
                                 />
                                 <button
                                     type="button"
@@ -680,7 +680,7 @@ export default function EditOrderPage() {
                     <button
                         type="button"
                         onClick={() => router.back()}
-                        className="px-6 py-3 rounded-xl border dark:border-gray-700 font-medium text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                        className="px-6 py-3 rounded-xl border border-gray-300 dark:border-gray-700 font-medium text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                     >
                         Batal
                     </button>
