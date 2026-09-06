@@ -534,7 +534,7 @@ function FinanceContent() {
                   {transactionType === "expense" ? (
                     <>
                       <option value="Restock Bahan / Stok Barang">Restock Bahan / Stok Barang</option>
-                      <option value="Operasional (Listrik/Wifi/Air)">Operasional (Listrik/Wifi/Air)</option>
+                      <option value="Operasional">Operasional</option>
                       <option value="Gaji Karyawan">Gaji Karyawan</option>
                       <option value="Sewa Tempat">Sewa Tempat</option>
                       <option value="Lain-lain">Lain-lain</option>

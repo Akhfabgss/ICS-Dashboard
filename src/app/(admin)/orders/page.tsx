@@ -6,12 +6,14 @@ import Swal from "sweetalert2";
 import { Order, OrderStatus } from "@/types/order";
 import { UserProfile } from "@/types/users";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import flatpickr from "flatpickr";
 import "flatpickr/dist/flatpickr.css";
-import { CalenderIcon } from "@/icons"; // Sesuaikan path icon milikmu
+import { CalenderIcon } from "@/icons";
 import { deductStockForOrder } from "@/lib/stockDeduction";
 
 export default function OrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -19,9 +21,15 @@ export default function OrdersPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<UserProfile[]>([]);
 
+  // Filter States Additional
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [selectedPaidStatus, setSelectedPaidStatus] = useState("");
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState("");
+  const [selectedAssignee, setSelectedAssignee] = useState("");
+
   const datePickerRef = useRef<HTMLInputElement | null>(null);
   const fpInstance = useRef<flatpickr.Instance | null>(null);
-  // Inisialisasi Flatpickr Rentang Tanggal
+
   useEffect(() => {
     if (datePickerRef.current) {
       fpInstance.current = flatpickr(datePickerRef.current, {
@@ -44,6 +52,7 @@ export default function OrdersPage() {
     };
   }, []);
 
+  // Handler Reset Khusus Tanggal
   const handleResetDate = () => {
     setDateRange([null, null]);
     if (fpInstance.current) {
@@ -51,7 +60,16 @@ export default function OrdersPage() {
     }
   };
 
-  // Fetch Daftar Pesanan & Staf
+  // Handler Reset Semua Filter
+  const handleResetFilters = () => {
+    handleResetDate();
+    setSearchQuery("");
+    setSelectedProduct("");
+    setSelectedPaidStatus("");
+    setSelectedShippingMethod("");
+    setSelectedAssignee("");
+  };
+
   const fetchOrders = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -80,7 +98,6 @@ export default function OrdersPage() {
         }
       }
 
-      // Filter khusus Staf & Designer
       const { data: staff, error: staffError } = await supabase
         .from("profiles")
         .select("id, full_name, email, role")
@@ -106,22 +123,20 @@ export default function OrdersPage() {
     normalizedRole !== "designer" &&
     normalizedRole !== "";
 
-  const orderSummary = useMemo(() => {
-    const totalOrders = orders.length;
-    const paidOffOrders = orders.filter((o) => o.is_paid_off).length;
-    const pendingPaymentOrders = totalOrders - paidOffOrders;
-    const inProgressOrders = orders.filter(
-      (o) => o.status === "Proses Design" || o.status === "Pengerjaan"
-    ).length;
-    return { totalOrders, paidOffOrders, pendingPaymentOrders, inProgressOrders };
+  const uniqueProducts = useMemo(() => {
+    const products = orders.map((o) => o.product_name).filter(Boolean);
+    return Array.from(new Set(products)).sort();
   }, [orders]);
 
-  // Filter Gabungan Search Nama & Single Input Date Range
+  // Filter Data Orders
   const filteredOrders = useMemo(() => {
     const [startDate, endDate] = dateRange;
 
     return orders.filter((o) => {
-      const matchesName = !searchQuery || o.customer_name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch =
+        !searchQuery ||
+        o.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        o.order_number.toLowerCase().includes(searchQuery.toLowerCase());
 
       const orderDate = new Date(o.created_at);
       orderDate.setHours(0, 0, 0, 0);
@@ -140,9 +155,55 @@ export default function OrdersPage() {
         matchesEndDate = orderDate <= end;
       }
 
-      return matchesName && matchesStartDate && matchesEndDate;
+      const matchesProduct = !selectedProduct || o.product_name === selectedProduct;
+
+      let matchesPaidStatus = true;
+      if (selectedPaidStatus === "LUNAS") {
+        matchesPaidStatus = o.is_paid_off === true;
+      } else if (selectedPaidStatus === "BELUM_LUNAS") {
+        matchesPaidStatus = o.is_paid_off === false;
+      }
+
+      const matchesShipping =
+        !selectedShippingMethod || o.shipping_method === selectedShippingMethod;
+
+      let matchesAssignee = true;
+      if (selectedAssignee === "UNASSIGNED") {
+        matchesAssignee = !o.assigned_to;
+      } else if (selectedAssignee) {
+        matchesAssignee = o.assigned_to === selectedAssignee;
+      }
+
+      return (
+        matchesSearch &&
+        matchesStartDate &&
+        matchesEndDate &&
+        matchesProduct &&
+        matchesPaidStatus &&
+        matchesShipping &&
+        matchesAssignee
+      );
     });
-  }, [orders, searchQuery, dateRange]);
+  }, [
+    orders,
+    searchQuery,
+    dateRange,
+    selectedProduct,
+    selectedPaidStatus,
+    selectedShippingMethod,
+    selectedAssignee,
+  ]);
+
+  // Statistik Dinamis Berdasarkan Filtered Orders
+  const orderSummary = useMemo(() => {
+    const totalOrders = filteredOrders.length;
+    const paidOffOrders = filteredOrders.filter((o) => o.is_paid_off).length;
+    const pendingPaymentOrders = totalOrders - paidOffOrders;
+    const inProgressOrders = filteredOrders.filter(
+      (o) => o.status === "Proses Design" || o.status === "Pengerjaan"
+    ).length;
+    return { totalOrders, paidOffOrders, pendingPaymentOrders, inProgressOrders };
+  }, [filteredOrders]);
 
   const updateStatus = async (order: Order, newStatus: OrderStatus) => {
     const { error } = await supabase
@@ -155,13 +216,8 @@ export default function OrdersPage() {
       return;
     }
 
-    // Potong stok otomatis saat status berubah menjadi "Selesai"
     if (newStatus === "Selesai") {
-      await deductStockForOrder(
-        order.product_name,          // nama produk → di-resolve ke ID di helper
-        order.add_ons ?? [],          // nama-nama addon
-        1                             // qty order (1 per order)
-      );
+      await deductStockForOrder(order.product_name, order.add_ons ?? [], 1);
     }
 
     Swal.fire({
@@ -233,10 +289,74 @@ export default function OrdersPage() {
     }
   };
 
+  // HANDLER DUPLIKAT ORDER
+  const handleDuplicate = async (orderToDuplicate: Order) => {
+    const result = await Swal.fire({
+      title: "Duplikat Pesanan?",
+      text: `Buat pesanan baru dengan menyalin data dari ${orderToDuplicate.order_number}?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#4f46e5",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Ya, Duplikat!",
+      cancelButtonText: "Batal",
+    });
+
+    if (!result.isConfirmed) return;
+
+    // Generate Order Number Baru
+    const newOrderNumber = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    // Mengabaikan kolom-kolom tergenerasi otomatis dari database
+    const {
+      id,
+      created_at,
+      total_price,
+      remaining_payment,
+      is_paid_off,
+      ...restOrder
+    } = orderToDuplicate;
+
+    const duplicatedData = {
+      ...restOrder,
+      order_number: newOrderNumber,
+      status: "Dalam Daftar" as OrderStatus,
+      assigned_to: null, // Reset penugasan staf
+    };
+
+    const { data, error } = await supabase
+      .from("orders")
+      .insert([duplicatedData])
+      .select()
+      .single();
+
+    if (error) {
+      Swal.fire("Error!", "Gagal menduplikat pesanan: " + error.message, "error");
+      return;
+    }
+
+    Swal.fire({
+      title: "Pesanan Diduplikat!",
+      text: `Pesanan baru ${newOrderNumber} berhasil dibuat. Masuk ke halaman edit untuk mengubah isian data desain?`,
+      icon: "success",
+      showCancelButton: true,
+      confirmButtonColor: "#f59e0b",
+      cancelButtonColor: "#4f46e5",
+      confirmButtonText: "Edit Data Desain",
+      cancelButtonText: "Tetap di Sini",
+    }).then((res) => {
+      if (res.isConfirmed && data?.id) {
+        router.push(`/orders/edit/${data.id}`);
+      } else {
+        fetchOrders();
+      }
+    });
+  };
+
   const getStatusBadge = (status: OrderStatus | string) => {
     switch (status) {
       case "Dalam Daftar":
-        return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+        return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-white";
       case "Pending":
         return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
       case "Proses Design":
@@ -254,8 +374,16 @@ export default function OrdersPage() {
     }
   };
 
+  const isAnyFilterActive =
+    searchQuery ||
+    dateRange[0] ||
+    selectedProduct ||
+    selectedPaidStatus ||
+    selectedShippingMethod ||
+    selectedAssignee;
+
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6 text-gray-900 dark:text-gray-100 min-w-0 max-w-full">
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -268,7 +396,7 @@ export default function OrdersPage() {
         </div>
         <Link
           href="/orders/create"
-          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors inline-block"
+          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors inline-block text-center"
         >
           + Tambah Pesanan Baru
         </Link>
@@ -302,65 +430,150 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* FILTER TANGGAL RENTANG & PENCARIAN */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-t pt-4 dark:border-gray-800">
-        {/* Single Date Range Picker */}
-        <div className="relative inline-flex items-center gap-2">
-          <div className="relative">
-            <CalenderIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10 w-6 h-6" />
-            <input
-              ref={datePickerRef}
-              className="h-9 w-48 pl-9 pr-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 cursor-pointer focus:border-brand-500"
-              placeholder="Pilih rentang tgl..."
-            />
-          </div>
-
-          {dateRange[0] && (
+      {/* SECTION FILTER & SEARCH */}
+      <div className="rounded-xl border-t pt-4 dark:border-gray-800 dark:bg-gray-900 space-y-3">
+        {/* Header Section Filter */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+            Filter Data
+          </span>
+          {isAnyFilterActive && (
             <button
-              onClick={handleResetDate}
-              className="text-xs text-rose-500 hover:underline font-medium"
+              onClick={handleResetFilters}
+              className="text-xs text-rose-500 hover:underline font-semibold cursor-pointer"
             >
-              Reset
+              Reset Semua Filter
             </button>
           )}
         </div>
 
-        {/* Search Bar */}
-        <input
-          type="text"
-          placeholder="Cari nama pemesan..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-xs outline-none focus:border-brand-500 dark:text-white"
-        />
+        <div className="space-y-3">
+          {/* BARIS 1: Search Bar (Full Lebar) */}
+          <input
+            type="text"
+            placeholder="Cari nama / no. order..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-10 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3.5 text-xs outline-none focus:border-brand-500 dark:text-white"
+          />
+
+          {/* BARIS 2: Semua Filter Pas dalam 1 Baris (Full Lebar) */}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full">
+            {/* Rentang Tanggal */}
+            <div className="relative flex-1 w-full min-w-0">
+              <CalenderIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10 w-6 h-6" />
+              <input
+                ref={datePickerRef}
+                className="h-9 w-full pl-9 pr-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 cursor-pointer focus:border-brand-500 truncate"
+                placeholder="Pilih rentang tanggal..."
+              />
+            </div>
+
+            {/* Filter 1: Produk */}
+            <select
+              value={selectedProduct}
+              onChange={(e) => setSelectedProduct(e.target.value)}
+              className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
+            >
+              <option value="">Semua Produk</option>
+              {uniqueProducts.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+
+            {/* Filter 2: Status Bayar */}
+            <select
+              value={selectedPaidStatus}
+              onChange={(e) => setSelectedPaidStatus(e.target.value)}
+              className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
+            >
+              <option value="">Semua Status Bayar</option>
+              <option value="LUNAS">LUNAS</option>
+              <option value="BELUM_LUNAS">BELUM LUNAS / DP</option>
+            </select>
+
+            {/* Filter 3: Kurir */}
+            <select
+              value={selectedShippingMethod}
+              onChange={(e) => setSelectedShippingMethod(e.target.value)}
+              className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
+            >
+              <option value="">Semua Kurir</option>
+              <option value="JNE">JNE</option>
+              <option value="J&T">J&amp;T Express</option>
+              <option value="SPX">SPX (Shopee Express)</option>
+              <option value="Lion Parcel">Lion Parcel</option>
+              <option value="Di Tempat">Di Tempat (Ambil Toko)</option>
+            </select>
+
+            {/* Filter 4: Staf */}
+            <select
+              value={selectedAssignee}
+              onChange={(e) => setSelectedAssignee(e.target.value)}
+              className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
+            >
+              <option value="">Semua Staf</option>
+              <option value="UNASSIGNED">Belum Ditugaskan</option>
+              {staffList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.full_name || s.email}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
-      {/* TABEL ORDERS */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900">
-        <div className="max-w-full overflow-x-auto">
-          <table className="w-full text-left text-sm">
+      {/* CONTAINER UTAMA TABEL */}
+      <div className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900">
+        {/* AREA SCROLLBAR HORIZONTAL LOKAL */}
+        <div className="w-full max-w-full overflow-x-auto">
+          <table className="w-max min-w-full text-left text-sm border-collapse">
             <thead className="border-b bg-gray-50 border-gray-200 dark:border-gray-800 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400">
               <tr>
-                <th className="px-4 py-3 font-medium">No. Order / Tgl</th>
-                <th className="px-4 py-3 font-medium">Pemesan</th>
-                <th className="px-4 py-3 font-medium">Produk &amp; Addons</th>
-                <th className="px-4 py-3 font-medium">Total &amp; Status Bayar</th>
-                <th className="px-4 py-3 font-medium">Status Pesanan</th>
-                <th className="px-4 py-3 font-medium">Dikerjakan Oleh</th>
-                <th className="px-4 py-3 font-medium text-center">Aksi</th>
+                <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[140px]">
+                  No. Order / Tgl
+                </th>
+                <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[160px]">
+                  Pemesan
+                </th>
+                <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[280px]">
+                  Produk &amp; Addons
+                </th>
+                <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[180px]">
+                  Total &amp; Status Bayar
+                </th>
+                <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[150px]">
+                  Status Pesanan
+                </th>
+                <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[120px]">
+                  Pengiriman
+                </th>
+                <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[180px]">
+                  Dikerjakan Oleh
+                </th>
+                <th className="px-4 py-3.5 font-medium text-center whitespace-nowrap min-w-[240px]">
+                  Aksi
+                </th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-6">
+                  <td colSpan={8} className="text-center py-6 whitespace-nowrap">
                     Memuat data...
                   </td>
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-6 text-gray-500">
-                    {searchQuery || dateRange[0]
+                  <td
+                    colSpan={8}
+                    className="text-center py-6 text-gray-500 whitespace-nowrap"
+                  >
+                    {isAnyFilterActive
                       ? "Tidak ada pesanan yang sesuai dengan filter."
                       : "Belum ada pesanan terdaftar."}
                   </td>
@@ -377,50 +590,66 @@ export default function OrdersPage() {
                     "";
 
                   return (
-                    <tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                      <td className="px-4 py-3">
-                        <p className="font-semibold text-gray-800 dark:text-white">
+                    <tr
+                      key={order.id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                      {/* No Order / Tanggal */}
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <p className="font-semibold text-gray-800 dark:text-white whitespace-nowrap">
                           {order.order_number}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 whitespace-nowrap">
                           {new Date(order.created_at).toLocaleDateString("id-ID")}
                         </p>
                       </td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-gray-800 dark:text-white">
+
+                      {/* Pemesan */}
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <p className="font-medium text-gray-800 dark:text-white whitespace-nowrap">
                           {order.customer_name}
                         </p>
-                        <p className="text-xs text-gray-500">{order.phone_number}</p>
+                        <p className="text-xs text-gray-500 whitespace-nowrap">
+                          {order.phone_number}
+                        </p>
                       </td>
-                      <td className="px-4 py-3">
+
+                      {/* Produk & Addons */}
+                      <td className="px-4 py-4">
                         <p className="font-medium text-gray-800 dark:text-white">
                           {order.product_name}
                         </p>
                         {order.add_ons && order.add_ons.length > 0 && (
-                          <p className="text-xs text-gray-500">+ {order.add_ons.join(", ")}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            + {order.add_ons.join(", ")}
+                          </p>
                         )}
                       </td>
 
-                      <td className="px-4 py-3">
+                      {/* Total & Status Bayar */}
+                      <td className="px-4 py-4 whitespace-nowrap">
                         {isFinanceVisible ? (
                           <>
-                            <p className="font-semibold text-gray-800 dark:text-white">
-                              Rp {Number(order.total_price || 0).toLocaleString("id-ID")}
+                            <p className="font-semibold text-gray-800 dark:text-white whitespace-nowrap">
+                              Rp{" "}
+                              {Number(order.total_price || 0).toLocaleString("id-ID")}
                             </p>
                             <span
-                              className={`inline-block mt-1 px-2 py-0.5 text-xs font-semibold rounded-full ${order.is_paid_off
+                              className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${order.is_paid_off
                                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                 : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                                 }`}
                             >
                               {order.is_paid_off
                                 ? "LUNAS"
-                                : `Sisa: Rp ${Number(order.remaining_payment || 0).toLocaleString("id-ID")}`}
+                                : `Sisa: Rp ${Number(
+                                  order.remaining_payment || 0
+                                ).toLocaleString("id-ID")}`}
                             </span>
                           </>
                         ) : (
                           <span
-                            className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full ${order.is_paid_off
+                            className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full whitespace-nowrap ${order.is_paid_off
                               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                               : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                               }`}
@@ -430,11 +659,14 @@ export default function OrdersPage() {
                         )}
                       </td>
 
-                      <td className="px-4 py-3">
+                      {/* Status Pesanan */}
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <select
                           value={order.status}
-                          onChange={(e) => updateStatus(order, e.target.value as OrderStatus)}
-                          className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border-0 focus:ring-2 focus:ring-brand-500 ${getStatusBadge(
+                          onChange={(e) =>
+                            updateStatus(order, e.target.value as OrderStatus)
+                          }
+                          className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border-0 focus:ring-2 focus:ring-brand-500 cursor-pointer whitespace-nowrap ${getStatusBadge(
                             order.status
                           )}`}
                         >
@@ -448,13 +680,23 @@ export default function OrdersPage() {
                         </select>
                       </td>
 
-                      <td className="px-4 py-3">
+                      {/* Pengiriman */}
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className="inline-block px-2.5 py-1 text-xs font-semibold rounded-md text-gray-800 dark:bg-indigo-950/40 dark:text-white whitespace-nowrap">
+                          {order.shipping_method || "JNE"}
+                        </span>
+                      </td>
+
+                      {/* Dikerjakan Oleh */}
+                      <td className="px-4 py-4 whitespace-nowrap">
                         <select
                           value={selectedAssigneeValue}
-                          onChange={(e) => updateAssignee(order.id, e.target.value)}
-                          className="text-xs font-medium rounded-lg px-2.5 py-1.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-brand-500 outline-none min-w-[140px]"
+                          onChange={(e) =>
+                            updateAssignee(order.id, e.target.value)
+                          }
+                          className="text-xs font-medium rounded-lg px-2.5 py-1.5 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-brand-500 outline-none w-full cursor-pointer whitespace-nowrap"
                         >
-                          <option value="">— Belum Ditugaskan —</option>
+                          <option value="">Belum Ditugaskan</option>
                           {staffList.map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.full_name || s.email}
@@ -463,25 +705,38 @@ export default function OrdersPage() {
                         </select>
                       </td>
 
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-1.5">
+                      {/* Aksi */}
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                           <Link
                             href={`/orders/${order.id}`}
-                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors whitespace-nowrap"
                             title="Lihat Detail"
                           >
                             Detail
                           </Link>
+
+                          <button
+                            onClick={() => handleDuplicate(order)}
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 transition-colors cursor-pointer whitespace-nowrap"
+                            title="Duplikat Pesanan Ini"
+                          >
+                            Duplikat
+                          </button>
+
                           <Link
                             href={`/orders/edit/${order.id}`}
-                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors whitespace-nowrap"
                             title="Edit Order"
                           >
                             Edit
                           </Link>
+
                           <button
-                            onClick={() => handleDelete(order.id, order.order_number)}
-                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors"
+                            onClick={() =>
+                              handleDelete(order.id, order.order_number)
+                            }
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer whitespace-nowrap"
                             title="Hapus Order"
                           >
                             Hapus
@@ -496,6 +751,26 @@ export default function OrdersPage() {
           </table>
         </div>
       </div>
+
+      {/* FOOTER KETERANGAN TOTAL DATA (POSISI GARIS MERAH) */}
+      <div className="flex items-center justify-between border-gray-200 px-4 py-3 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+          {loading ? (
+            "Memuat data..."
+          ) : filteredOrders.length === 0 ? (
+            "Menampilkan 0 data"
+          ) : isAnyFilterActive ? (
+            <>
+              Menampilkan <span className="font-semibold text-gray-800 dark:text-white">{filteredOrders.length}</span> Total orderan
+            </>
+          ) : (
+            <>
+              Menampilkan <span className="font-semibold text-gray-800 dark:text-white">{filteredOrders.length}</span> total orderan
+            </>
+          )}
+        </p>
+      </div>
+
     </div>
   );
 }
