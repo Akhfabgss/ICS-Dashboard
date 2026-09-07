@@ -2,27 +2,47 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { Todo } from "@/types/todo";
+import { UserProfile } from "@/types/users";
 import Swal from "sweetalert2";
 
-export default function TodosPage() {
-    const [todos, setTodos] = useState<Todo[]>([]);
-    const [newTitle, setNewTitle] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [showCompleted, setShowCompleted] = useState(false);
+interface SharedTodo {
+    id: string;
+    owner_id: string; // ID user pemilik card
+    title: string;
+    is_completed: boolean;
+    created_at: string;
+}
 
-    // 1. Fetch Data Awal & Set Realtime Listener
+// Pilihan warna card ala Google Keep
+const CARD_COLORS = [
+    "bg-amber-500 text-white",
+    "bg-emerald-600 text-white",
+    "bg-cyan-600 text-white",
+    "bg-indigo-600 text-white",
+    "bg-rose-500 text-white",
+    "bg-purple-600 text-white",
+];
+
+export default function SharedTodosPage() {
+    const [users, setUsers] = useState<UserProfile[]>([]);
+    const [todos, setTodos] = useState<SharedTodo[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [inputMap, setInputMap] = useState<{ [userId: string]: string }>({});
+
+    // State untuk toggle buka/tutup archive per user (misal: { [userId]: true/false })
+    const [openArchiveMap, setOpenArchiveMap] = useState<{ [userId: string]: boolean }>({});
+
     useEffect(() => {
-        fetchTodos();
+        initData();
 
         // Listener Realtime Supabase
         const channel = supabase
-            .channel("todos_realtime_page")
+            .channel("shared_todos_realtime")
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "todos" },
                 () => {
-                    fetchTodos();
+                    fetchTodosOnly();
                 }
             )
             .subscribe();
@@ -32,52 +52,63 @@ export default function TodosPage() {
         };
     }, []);
 
-    const fetchTodos = async () => {
+    const initData = async () => {
         setLoading(true);
-        // RLS Supabase otomatis menyaring hanya data milik user yang sedang login
-        const { data, error } = await supabase
-            .from("todos")
-            .select("*")
-            .order("created_at", { ascending: false });
+        const { data: profilesData } = await supabase
+            .from("profiles")
+            .select("id, full_name, email, role")
+            .order("full_name");
 
-        if (!error && data) {
-            setTodos(data as Todo[]);
+        if (profilesData) {
+            setUsers(profilesData as UserProfile[]);
         }
+
+        await fetchTodosOnly();
         setLoading(false);
     };
 
-    // 2. Tambah Catatan Baru
-    const handleAddTodo = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newTitle.trim()) return;
+    const fetchTodosOnly = async () => {
+        const { data } = await supabase
+            .from("todos")
+            .select("*")
+            .order("created_at", { ascending: true });
 
-        const {
-            data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session?.user) {
-            Swal.fire("Error", "Kamu harus login terlebih dahulu", "error");
-            return;
-        }
-
-        const { error } = await supabase.from("todos").insert([
-            {
-                title: newTitle.trim(),
-                user_id: session.user.id,
-            },
-        ]);
-
-        if (error) {
-            Swal.fire("Error!", "Gagal menambah tugas: " + error.message, "error");
-        } else {
-            setNewTitle("");
-            fetchTodos();
+        if (data) {
+            setTodos(data as SharedTodo[]);
         }
     };
 
-    // 3. Toggle Centang Selesai / Belum
-    const handleToggleTodo = async (id: string, currentStatus: boolean) => {
-        // Update Optimistik di UI biar responsif
+    // Toggle buka/tutup arsip di card user tertentu
+    const toggleArchive = (userId: string) => {
+        setOpenArchiveMap((prev) => ({
+            ...prev,
+            [userId]: !prev[userId],
+        }));
+    };
+
+    // Tambah Task ke Card User
+    const handleAddTodoToUser = async (ownerId: string) => {
+        const text = inputMap[ownerId]?.trim();
+        if (!text) return;
+
+        const { error } = await supabase.from("todos").insert([
+            {
+                title: text,
+                owner_id: ownerId,
+                is_completed: false,
+            },
+        ]);
+
+        if (!error) {
+            setInputMap((prev) => ({ ...prev, [ownerId]: "" }));
+            fetchTodosOnly();
+        } else {
+            Swal.fire("Error", error.message, "error");
+        }
+    };
+
+    // Toggle Status Centang
+    const handleToggle = async (id: string, currentStatus: boolean) => {
         setTodos((prev) =>
             prev.map((t) => (t.id === id ? { ...t, is_completed: !currentStatus } : t))
         );
@@ -87,27 +118,28 @@ export default function TodosPage() {
             .update({ is_completed: !currentStatus })
             .eq("id", id);
 
-        if (error) {
-            fetchTodos(); // Rollback jika ada error DB
-        }
+        if (error) fetchTodosOnly();
     };
 
-    // 4. Hapus Satu Tugas
-    const handleDeleteTodo = async (id: string) => {
+    // Hapus Single Item
+    const handleDelete = async (id: string) => {
         const { error } = await supabase.from("todos").delete().eq("id", id);
         if (!error) {
             setTodos((prev) => prev.filter((t) => t.id !== id));
         }
     };
 
-    // 5. Bersihkan Semua Tugas Selesai (Clear Archive)
-    const handleClearCompleted = async () => {
-        const completedIds = todos.filter((t) => t.is_completed).map((t) => t.id);
-        if (completedIds.length === 0) return;
+    // Bersihkan Semua Task Selesai Khusus di Card User Tersebut
+    const handleClearUserCompleted = async (ownerId: string, ownerName: string) => {
+        const userCompletedIds = todos
+            .filter((t) => t.owner_id === ownerId && t.is_completed)
+            .map((t) => t.id);
+
+        if (userCompletedIds.length === 0) return;
 
         const result = await Swal.fire({
-            title: "Bersihkan Tugas Selesai?",
-            text: `Apakah kamu yakin ingin menghapus ${completedIds.length} tugas yang sudah selesai secara permanen?`,
+            title: `Bersihkan Selesai (${ownerName})?`,
+            text: `Hapus ${userCompletedIds.length} tugas selesai di card ini?`,
             icon: "warning",
             showCancelButton: true,
             confirmButtonColor: "#d33",
@@ -120,158 +152,185 @@ export default function TodosPage() {
             const { error } = await supabase
                 .from("todos")
                 .delete()
-                .in("id", completedIds);
+                .in("id", userCompletedIds);
 
             if (!error) {
-                setTodos((prev) => prev.filter((t) => !t.is_completed));
-                Swal.fire({
-                    toast: true,
-                    position: "top-end",
-                    icon: "success",
-                    title: "Tugas selesai berhasil dibersihkan!",
-                    showConfirmButton: false,
-                    timer: 2000,
-                });
+                setTodos((prev) => prev.filter((t) => !userCompletedIds.includes(t.id)));
             }
         }
     };
 
-    // Pisahkan Data Aktif & Selesai
-    const activeTodos = useMemo(() => todos.filter((t) => !t.is_completed), [todos]);
-    const completedTodos = useMemo(() => todos.filter((t) => t.is_completed), [todos]);
+    // Mengelompokkan todos berdasarkan owner_id
+    const todosByOwner = useMemo(() => {
+        const map: { [ownerId: string]: SharedTodo[] } = {};
+        todos.forEach((t) => {
+            if (!map[t.owner_id]) map[t.owner_id] = [];
+            map[t.owner_id].push(t);
+        });
+        return map;
+    }, [todos]);
 
     return (
-        <div className="p-4 sm:p-6 space-y-6 text-gray-900 dark:text-gray-100 max-w-4xl mx-auto min-w-0">
-            {/* HEADER PAGES */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-200 dark:border-gray-800 pb-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-                        Catatan &amp; To-Do Pribadi
-                    </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Kelola daftar tugas harian kamu. Catatan ini hanya bisa dilihat oleh akun kamu.
-                    </p>
-                </div>
-                <span className="self-start sm:self-auto text-xs font-semibold px-3 py-1.5 rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400">
-                    {activeTodos.length} Tugas Aktif
-                </span>
+        <div className="p-4 sm:p-6 space-y-6 text-gray-900 dark:text-gray-100 min-w-0 max-w-full">
+            {/* HEADER */}
+            <div>
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+                    To Do List Tim (Google Keep Style)
+                </h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Catatan bersama bersifat terbuka. Semua staf bisa membaca, menambah, dan mengubah catatan di card manapun.
+                </p>
             </div>
 
-            {/* FORM INPUT TUGAS BARU */}
-            <form onSubmit={handleAddTodo} className="flex gap-2">
-                <input
-                    type="text"
-                    placeholder="Tulis catatan atau tugas baru kamu di sini..."
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    className="h-11 flex-1 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 text-sm outline-none focus:border-brand-500 dark:text-white shadow-xs"
-                />
-                <button
-                    type="submit"
-                    disabled={!newTitle.trim()}
-                    className="h-11 px-5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors cursor-pointer shadow-xs"
-                >
-                    + Tambah
-                </button>
-            </form>
+            {loading ? (
+                <p className="text-center text-sm text-gray-400 py-10">Memuat board...</p>
+            ) : (
+                /* GRID CARDS LAYOUT */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 items-start">
+                    {users.map((user, idx) => {
+                        const colorClass = CARD_COLORS[idx % CARD_COLORS.length];
+                        const allUserTodos = todosByOwner[user.id] || [];
 
-            {/* SECTION TUGAS AKTIF */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 shadow-xs space-y-3">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    Tugas Aktif ({activeTodos.length})
-                </h2>
+                        // PISAHKAN AKTIF & SELESAI PER CARD
+                        const activeUserTodos = allUserTodos.filter((t) => !t.is_completed);
+                        const completedUserTodos = allUserTodos.filter((t) => t.is_completed);
+                        const isArchiveOpen = !!openArchiveMap[user.id];
+                        const userName = user.full_name || user.email.split("@")[0];
 
-                <div className="space-y-2">
-                    {loading ? (
-                        <p className="text-xs text-center py-6 text-gray-400">Memuat catatan...</p>
-                    ) : activeTodos.length === 0 ? (
-                        <div className="text-center py-8 text-gray-400 space-y-1">
-                            <p className="text-sm font-medium italic">Semua tugas aktif sudah selesai!</p>
-                            <p className="text-xs">Tulis tugas baru pada kolom di atas.</p>
-                        </div>
-                    ) : (
-                        activeTodos.map((todo) => (
+                        return (
                             <div
-                                key={todo.id}
-                                className="group flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:border-gray-200 dark:border-gray-800 dark:hover:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 transition-all"
+                                key={user.id}
+                                className={`rounded-2xl p-5 shadow-md flex flex-col justify-between min-h-[320px] ${colorClass} transition-transform hover:scale-[1.01]`}
                             >
-                                <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-                                    <input
-                                        type="checkbox"
-                                        checked={todo.is_completed}
-                                        onChange={() => handleToggleTodo(todo.id, todo.is_completed)}
-                                        className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
-                                    />
-                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                                        {todo.title}
-                                    </span>
-                                </label>
+                                <div className="space-y-4">
+                                    {/* JUDUL CARD */}
+                                    <h2 className="text-lg font-bold tracking-wide">
+                                        To Do List ({userName})
+                                    </h2>
 
-                                <button
-                                    onClick={() => handleDeleteTodo(todo.id)}
-                                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-rose-500 transition-opacity cursor-pointer text-sm"
-                                    title="Hapus Tugas"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
+                                    {/* 1. DAFTAR TUGAS AKTIF */}
+                                    <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                                        {activeUserTodos.length === 0 ? (
+                                            <p className="text-xs opacity-75 italic">Tidak ada tugas aktif.</p>
+                                        ) : (
+                                            activeUserTodos.map((item) => (
+                                                <div
+                                                    key={item.id}
+                                                    className="group flex items-center justify-between gap-2 py-1"
+                                                >
+                                                    <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={item.is_completed}
+                                                            onChange={() => handleToggle(item.id, item.is_completed)}
+                                                            className="w-4 h-4 rounded border-white/40 text-gray-900 focus:ring-0 cursor-pointer accent-white"
+                                                        />
+                                                        <span className="text-sm break-words">
+                                                            {item.title}
+                                                        </span>
+                                                    </label>
 
-            {/* SECTION TUGAS SELESAI (ARCHIVE / ACCORDION) */}
-            {completedTodos.length > 0 && (
-                <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 shadow-xs space-y-3">
-                    <div className="flex items-center justify-between">
-                        <button
-                            onClick={() => setShowCompleted(!showCompleted)}
-                            className="text-xs font-bold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
-                        >
-                            <span>{showCompleted ? "▼" : "▶"}</span>
-                            <span>Tugas Selesai / Arsip ({completedTodos.length})</span>
-                        </button>
+                                                    <button
+                                                        onClick={() => handleDelete(item.id)}
+                                                        className="opacity-0 group-hover:opacity-100 text-xs px-1.5 py-0.5 rounded hover:bg-black/20 transition-opacity"
+                                                        title="Hapus"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
 
-                        {showCompleted && (
-                            <button
-                                onClick={handleClearCompleted}
-                                className="text-xs text-rose-500 hover:underline font-semibold cursor-pointer"
-                            >
-                                Bersihkan Semua
-                            </button>
-                        )}
-                    </div>
+                                    {/* 2. SECTION TUGAS SELESAI / ARCHIVE (DENGAN ACCORDION) */}
+                                    {completedUserTodos.length > 0 && (
+                                        <div className="pt-2 border-t border-white/20 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <button
+                                                    onClick={() => toggleArchive(user.id)}
+                                                    className="text-xs font-semibold opacity-85 hover:opacity-100 flex items-center gap-1 cursor-pointer"
+                                                >
+                                                    <span>{isArchiveOpen ? "▼" : "▶"}</span>
+                                                    <span>Selesai ({completedUserTodos.length})</span>
+                                                </button>
 
-                    {showCompleted && (
-                        <div className="space-y-2 pt-1 border-t border-gray-100 dark:border-gray-800">
-                            {completedTodos.map((todo) => (
-                                <div
-                                    key={todo.id}
-                                    className="group flex items-center justify-between p-2.5 rounded-lg bg-gray-50/60 dark:bg-gray-800/30"
-                                >
-                                    <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-                                        <input
-                                            type="checkbox"
-                                            checked={todo.is_completed}
-                                            onChange={() => handleToggleTodo(todo.id, todo.is_completed)}
-                                            className="w-4 h-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500 cursor-pointer"
-                                        />
-                                        <span className="text-sm text-gray-400 dark:text-gray-500 line-through truncate">
-                                            {todo.title}
-                                        </span>
-                                    </label>
+                                                {isArchiveOpen && (
+                                                    <button
+                                                        onClick={() => handleClearUserCompleted(user.id, userName)}
+                                                        className="text-[10px] underline opacity-80 hover:opacity-100 font-medium cursor-pointer"
+                                                    >
+                                                        Bersihkan
+                                                    </button>
+                                                )}
+                                            </div>
 
-                                    <button
-                                        onClick={() => handleDeleteTodo(todo.id)}
-                                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-rose-500 transition-opacity cursor-pointer text-xs"
-                                        title="Hapus Permanent"
-                                    >
-                                        ✕
-                                    </button>
+                                            {/* LIST ITEM SELESAI / ARCHIVE */}
+                                            {isArchiveOpen && (
+                                                <div className="space-y-1.5 pl-2 max-h-[150px] overflow-y-auto pr-1">
+                                                    {completedUserTodos.map((item) => (
+                                                        <div
+                                                            key={item.id}
+                                                            className="group flex items-center justify-between gap-2 py-0.5 opacity-75 hover:opacity-100"
+                                                        >
+                                                            <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={item.is_completed}
+                                                                    onChange={() => handleToggle(item.id, item.is_completed)}
+                                                                    className="w-4 h-4 rounded border-white/40 text-gray-900 focus:ring-0 cursor-pointer accent-white"
+                                                                />
+                                                                <span className="text-xs line-through break-words">
+                                                                    {item.title}
+                                                                </span>
+                                                            </label>
+
+                                                            <button
+                                                                onClick={() => handleDelete(item.id)}
+                                                                className="opacity-0 group-hover:opacity-100 text-xs px-1 rounded hover:bg-black/20 transition-opacity"
+                                                                title="Hapus"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
-                        </div>
-                    )}
+
+                                {/* BOTTOM AREA: INPUT & BADGE NAMA */}
+                                <div className="mt-4 pt-3 border-t border-white/20 space-y-3">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Tambah item..."
+                                            value={inputMap[user.id] || ""}
+                                            onChange={(e) =>
+                                                setInputMap((prev) => ({
+                                                    ...prev,
+                                                    [user.id]: e.target.value,
+                                                }))
+                                            }
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") handleAddTodoToUser(user.id);
+                                            }}
+                                            className="w-full text-xs px-3 py-2 rounded-lg bg-white/20 placeholder-white/70 text-white outline-none focus:bg-white/30"
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-full bg-white/20">
+                                            {userName}
+                                        </span>
+                                        <span className="text-[10px] opacity-80">
+                                            {activeUserTodos.length} Pending
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>
