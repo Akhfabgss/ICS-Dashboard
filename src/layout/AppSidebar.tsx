@@ -20,6 +20,7 @@ import {
   Layers,
   Handshake,
   Clock,
+  ListCheckIcon,
 } from "lucide-react";
 
 type NavItem = {
@@ -69,6 +70,11 @@ const navItems: NavItem[] = [
     icon: <Clock />,
     name: "Presensi Pegawai",
     path: "/attendances",
+  },
+  {
+    icon: <ListCheckIcon />,
+    name: "To do List",
+    path: "/todos",
   },
   {
     icon: <User />,
