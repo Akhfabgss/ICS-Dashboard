@@ -1,45 +1,129 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
 import { Order, OrderStatus } from "@/types/order";
 import { UserProfile } from "@/types/users";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import flatpickr from "flatpickr";
 import "flatpickr/dist/flatpickr.css";
 import { CalenderIcon } from "@/icons";
 import { deductStockForOrder } from "@/lib/stockDeduction";
 
-export default function OrdersPage() {
+// Helper function untuk mengambil nilai 'Nama dalam Design' dari design_data (Array / Object / Text)
+function parseNamaDalamDesign(designData: string | null | undefined): string {
+  if (!designData) return "-";
+
+  try {
+    const parsed = JSON.parse(designData);
+
+    // 1. Jika struktur berupa ARRAY (Sesuai dengan OrderDetailPage)
+    if (Array.isArray(parsed)) {
+      const match = parsed.find(
+        (item) =>
+          item.key &&
+          item.key.toLowerCase().trim() === "nama dalam design" &&
+          item.value &&
+          item.value.trim() !== ""
+      );
+
+      if (match) return match.value.trim();
+
+      // Fallback: Jika key tidak persis, cari key yang mengandung kata 'nama'
+      const fallbackMatch = parsed.find(
+        (item) =>
+          item.key &&
+          item.key.toLowerCase().includes("nama") &&
+          item.value &&
+          item.value.trim() !== ""
+      );
+      if (fallbackMatch) return fallbackMatch.value.trim();
+    }
+
+    // 2. Jika struktur berupa OBJECT BIASA { "Nama dalam Design": "Royhan" }
+    if (typeof parsed === "object" && parsed !== null) {
+      return (
+        parsed["Nama dalam Design"] ||
+        parsed["nama_dalam_design"] ||
+        parsed["namaDesign"] ||
+        "-"
+      );
+    }
+  } catch (e) {
+    // 3. Jika BUKAN JSON (Teks baris biasa)
+    const lines = designData.split("\n");
+    for (const line of lines) {
+      if (line.toLowerCase().includes("nama dalam design")) {
+        const parts = line.split(":");
+        if (parts.length > 1) {
+          return parts.slice(1).join(":").trim();
+        }
+      }
+    }
+  }
+
+  return designData.trim() || "-";
+}
+
+function OrdersContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<UserProfile[]>([]);
 
-  // Filter States Additional
-  const [selectedProduct, setSelectedProduct] = useState("");
-  const [selectedPaidStatus, setSelectedPaidStatus] = useState("");
-  const [selectedShippingMethod, setSelectedShippingMethod] = useState("");
-  const [selectedAssignee, setSelectedAssignee] = useState("");
+  // Filter States (Inisialisasi dari URL Search Params agar awet pas balik dari Detail)
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
+  const [selectedProduct, setSelectedProduct] = useState(() => searchParams.get("product") || "");
+  const [selectedPaidStatus, setSelectedPaidStatus] = useState(() => searchParams.get("paidStatus") || "");
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState(() => searchParams.get("shipping") || "");
+  const [selectedAssignee, setSelectedAssignee] = useState(() => searchParams.get("assignee") || "");
+
+  // Inisialisasi Tanggal dari URL Params
+  const startDateParam = searchParams.get("startDate");
+  const endDateParam = searchParams.get("endDate");
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => [
+    startDateParam ? new Date(startDateParam) : null,
+    endDateParam ? new Date(endDateParam) : null,
+  ]);
 
   const datePickerRef = useRef<HTMLInputElement | null>(null);
   const fpInstance = useRef<flatpickr.Instance | null>(null);
+
+  // Update Query Params di URL setiap kali Filter Berubah
+  const updateQueryParams = (newParams: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    });
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   useEffect(() => {
     if (datePickerRef.current) {
       fpInstance.current = flatpickr(datePickerRef.current, {
         mode: "range",
         dateFormat: "Y-m-d",
+        defaultDate: dateRange[0] && dateRange[1] ? [dateRange[0], dateRange[1]] : undefined,
         onChange: (selectedDates) => {
           if (selectedDates.length === 2) {
             setDateRange([selectedDates[0], selectedDates[1]]);
+            updateQueryParams({
+              startDate: selectedDates[0].toISOString().split("T")[0],
+              endDate: selectedDates[1].toISOString().split("T")[0],
+            });
           } else if (selectedDates.length === 0) {
             setDateRange([null, null]);
+            updateQueryParams({ startDate: null, endDate: null });
           }
         },
       });
@@ -68,6 +152,7 @@ export default function OrdersPage() {
     setSelectedPaidStatus("");
     setSelectedShippingMethod("");
     setSelectedAssignee("");
+    router.replace(pathname, { scroll: false });
   };
 
   const fetchOrders = async () => {
@@ -289,7 +374,6 @@ export default function OrdersPage() {
     }
   };
 
-  // HANDLER DUPLIKAT ORDER
   const handleDuplicate = async (orderToDuplicate: Order) => {
     const result = await Swal.fire({
       title: "Duplikat Pesanan?",
@@ -304,10 +388,8 @@ export default function OrdersPage() {
 
     if (!result.isConfirmed) return;
 
-    // Generate Order Number Baru
     const newOrderNumber = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // Mengabaikan kolom-kolom tergenerasi otomatis dari database
     const {
       id,
       created_at,
@@ -321,7 +403,7 @@ export default function OrdersPage() {
       ...restOrder,
       order_number: newOrderNumber,
       status: "Dalam Daftar" as OrderStatus,
-      assigned_to: null, // Reset penugasan staf
+      assigned_to: null,
     };
 
     const { data, error } = await supabase
@@ -432,7 +514,6 @@ export default function OrdersPage() {
 
       {/* SECTION FILTER & SEARCH */}
       <div className="rounded-xl border-t pt-4 dark:border-gray-800 dark:bg-gray-900 space-y-3">
-        {/* Header Section Filter */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
             Filter Data
@@ -448,16 +529,19 @@ export default function OrdersPage() {
         </div>
 
         <div className="space-y-3">
-          {/* BARIS 1: Search Bar (Full Lebar) */}
+          {/* BARIS 1: Search Bar */}
           <input
             type="text"
             placeholder="Cari nama / no. order..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              updateQueryParams({ search: e.target.value || null });
+            }}
             className="h-10 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3.5 text-xs outline-none focus:border-brand-500 dark:text-white"
           />
 
-          {/* BARIS 2: Semua Filter Pas dalam 1 Baris (Full Lebar) */}
+          {/* BARIS 2: Filter Options */}
           <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full">
             {/* Rentang Tanggal */}
             <div className="relative flex-1 w-full min-w-0">
@@ -472,7 +556,10 @@ export default function OrdersPage() {
             {/* Filter 1: Produk */}
             <select
               value={selectedProduct}
-              onChange={(e) => setSelectedProduct(e.target.value)}
+              onChange={(e) => {
+                setSelectedProduct(e.target.value);
+                updateQueryParams({ product: e.target.value || null });
+              }}
               className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
             >
               <option value="">Semua Produk</option>
@@ -486,7 +573,10 @@ export default function OrdersPage() {
             {/* Filter 2: Status Bayar */}
             <select
               value={selectedPaidStatus}
-              onChange={(e) => setSelectedPaidStatus(e.target.value)}
+              onChange={(e) => {
+                setSelectedPaidStatus(e.target.value);
+                updateQueryParams({ paidStatus: e.target.value || null });
+              }}
               className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
             >
               <option value="">Semua Status Bayar</option>
@@ -497,7 +587,10 @@ export default function OrdersPage() {
             {/* Filter 3: Kurir */}
             <select
               value={selectedShippingMethod}
-              onChange={(e) => setSelectedShippingMethod(e.target.value)}
+              onChange={(e) => {
+                setSelectedShippingMethod(e.target.value);
+                updateQueryParams({ shipping: e.target.value || null });
+              }}
               className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
             >
               <option value="">Semua Kurir</option>
@@ -511,7 +604,10 @@ export default function OrdersPage() {
             {/* Filter 4: Staf */}
             <select
               value={selectedAssignee}
-              onChange={(e) => setSelectedAssignee(e.target.value)}
+              onChange={(e) => {
+                setSelectedAssignee(e.target.value);
+                updateQueryParams({ assignee: e.target.value || null });
+              }}
               className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
             >
               <option value="">Semua Staf</option>
@@ -528,7 +624,6 @@ export default function OrdersPage() {
 
       {/* CONTAINER UTAMA TABEL */}
       <div className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900">
-        {/* AREA SCROLLBAR HORIZONTAL LOKAL */}
         <div className="w-full max-w-full overflow-x-auto">
           <table className="w-max min-w-full text-left text-sm border-collapse">
             <thead className="border-b bg-gray-50 border-gray-200 dark:border-gray-800 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400">
@@ -589,6 +684,8 @@ export default function OrdersPage() {
                     order.assigned_to ||
                     "";
 
+                  const namaDalamDesign = parseNamaDalamDesign(order.design_data);
+
                   return (
                     <tr
                       key={order.id}
@@ -604,13 +701,16 @@ export default function OrdersPage() {
                         </p>
                       </td>
 
-                      {/* Pemesan */}
+                      {/* Pemesan (Nama Pemesan & Nama dalam Design) */}
                       <td className="px-4 py-4 whitespace-nowrap">
                         <p className="font-medium text-gray-800 dark:text-white whitespace-nowrap">
                           {order.customer_name}
                         </p>
-                        <p className="text-xs text-gray-500 whitespace-nowrap">
-                          {order.phone_number}
+                        <p
+                          className="text-xs text-gray-500 whitespace-nowrap truncate max-w-[180px]"
+                          title={namaDalamDesign}
+                        >
+                          {namaDalamDesign}
                         </p>
                       </td>
 
@@ -636,8 +736,8 @@ export default function OrdersPage() {
                             </p>
                             <span
                               className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${order.is_paid_off
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                  : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                                 }`}
                             >
                               {order.is_paid_off
@@ -650,8 +750,8 @@ export default function OrdersPage() {
                         ) : (
                           <span
                             className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full whitespace-nowrap ${order.is_paid_off
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                              : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                               }`}
                           >
                             {order.is_paid_off ? "LUNAS" : "BELUM LUNAS"}
@@ -752,7 +852,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* FOOTER KETERANGAN TOTAL DATA (POSISI GARIS MERAH) */}
+      {/* FOOTER KETERANGAN TOTAL DATA */}
       <div className="flex items-center justify-between border-gray-200 px-4 py-3 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
           {loading ? (
@@ -770,7 +870,14 @@ export default function OrdersPage() {
           )}
         </p>
       </div>
-
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-xs text-gray-400">Memuat halaman orders...</div>}>
+      <OrdersContent />
+    </Suspense>
   );
 }

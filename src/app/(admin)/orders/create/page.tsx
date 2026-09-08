@@ -26,6 +26,7 @@ const DEFAULT_DESIGN_FIELDS = [
     { key: "Via / Jalur", value: "" },
     { key: "Ketinggian / Jarak", value: "" },
     { key: "Tanggal", value: "" },
+    { key: "Durasi", value: "" },
     { key: "Quotes", value: "" },
     { key: "Link Foto (Drive)", value: "" },
     { key: "Catatan", value: "" },

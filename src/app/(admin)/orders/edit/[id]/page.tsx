@@ -34,6 +34,7 @@ const DEFAULT_DESIGN_FIELDS = [
     { key: "Via / Jalur", value: "" },
     { key: "Ketinggian / Jarak", value: "" },
     { key: "Tanggal", value: "" },
+    { key: "Durasi", value: "" },
     { key: "Quotes", value: "" },
     { key: "Link Foto (Drive)", value: "" },
     { key: "Catatan", value: "" },
@@ -501,8 +502,8 @@ export default function EditOrderPage() {
                                         <div
                                             key={item.id}
                                             className={`p-3 rounded-xl border transition-colors ${isExtraPhotoChecked
-                                                    ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10"
-                                                    : "border-gray-200 dark:border-gray-800"
+                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10"
+                                                : "border-gray-200 dark:border-gray-800"
                                                 }`}
                                         >
                                             <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium dark:text-gray-200">
@@ -537,8 +538,8 @@ export default function EditOrderPage() {
                                     <label
                                         key={item.id}
                                         className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-sm transition-colors ${selectedAddons.includes(item.name)
-                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium dark:text-white"
-                                                : "border-gray-200 dark:border-gray-800 dark:text-gray-300"
+                                            ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium dark:text-white"
+                                            : "border-gray-200 dark:border-gray-800 dark:text-gray-300"
                                             }`}
                                     >
                                         <input
