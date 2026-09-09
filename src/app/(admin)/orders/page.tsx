@@ -12,14 +12,13 @@ import "flatpickr/dist/flatpickr.css";
 import { CalenderIcon } from "@/icons";
 import { deductStockForOrder } from "@/lib/stockDeduction";
 
-// Helper function untuk mengambil nilai 'Nama dalam Design' dari design_data (Array / Object / Text)
+// Helper function untuk mengambil nilai 'Nama dalam Design' dari design_data
 function parseNamaDalamDesign(designData: string | null | undefined): string {
   if (!designData) return "-";
 
   try {
     const parsed = JSON.parse(designData);
 
-    // 1. Jika struktur berupa ARRAY (Sesuai dengan OrderDetailPage)
     if (Array.isArray(parsed)) {
       const match = parsed.find(
         (item) =>
@@ -31,7 +30,6 @@ function parseNamaDalamDesign(designData: string | null | undefined): string {
 
       if (match) return match.value.trim();
 
-      // Fallback: Jika key tidak persis, cari key yang mengandung kata 'nama'
       const fallbackMatch = parsed.find(
         (item) =>
           item.key &&
@@ -42,7 +40,6 @@ function parseNamaDalamDesign(designData: string | null | undefined): string {
       if (fallbackMatch) return fallbackMatch.value.trim();
     }
 
-    // 2. Jika struktur berupa OBJECT BIASA { "Nama dalam Design": "Royhan" }
     if (typeof parsed === "object" && parsed !== null) {
       return (
         parsed["Nama dalam Design"] ||
@@ -52,7 +49,6 @@ function parseNamaDalamDesign(designData: string | null | undefined): string {
       );
     }
   } catch (e) {
-    // 3. Jika BUKAN JSON (Teks baris biasa)
     const lines = designData.split("\n");
     for (const line of lines) {
       if (line.toLowerCase().includes("nama dalam design")) {
@@ -77,25 +73,25 @@ function OrdersContent() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<UserProfile[]>([]);
 
-  // Filter States (Inisialisasi dari URL Search Params agar awet pas balik dari Detail)
+  // Filter States dari URL Search Params
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
   const [selectedProduct, setSelectedProduct] = useState(() => searchParams.get("product") || "");
   const [selectedPaidStatus, setSelectedPaidStatus] = useState(() => searchParams.get("paidStatus") || "");
   const [selectedShippingMethod, setSelectedShippingMethod] = useState(() => searchParams.get("shipping") || "");
   const [selectedAssignee, setSelectedAssignee] = useState(() => searchParams.get("assignee") || "");
 
-  // Inisialisasi Tanggal dari URL Params
+  // Inisialisasi Rentang Tanggal dari URL Params (String Format YYYY-MM-DD)
   const startDateParam = searchParams.get("startDate");
   const endDateParam = searchParams.get("endDate");
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => [
-    startDateParam ? new Date(startDateParam) : null,
-    endDateParam ? new Date(endDateParam) : null,
+    startDateParam ? new Date(`${startDateParam}T00:00:00`) : null,
+    endDateParam ? new Date(`${endDateParam}T00:00:00`) : null,
   ]);
 
   const datePickerRef = useRef<HTMLInputElement | null>(null);
   const fpInstance = useRef<flatpickr.Instance | null>(null);
 
-  // Update Query Params di URL setiap kali Filter Berubah
+  // Update Query Params di URL
   const updateQueryParams = (newParams: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
     Object.entries(newParams).forEach(([key, value]) => {
@@ -108,33 +104,44 @@ function OrdersContent() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
+  // Inisialisasi & Sync Flatpickr saat mount/URL Params berubah
   useEffect(() => {
     if (datePickerRef.current) {
-      fpInstance.current = flatpickr(datePickerRef.current, {
-        mode: "range",
-        dateFormat: "Y-m-d",
-        defaultDate: dateRange[0] && dateRange[1] ? [dateRange[0], dateRange[1]] : undefined,
-        onChange: (selectedDates) => {
-          if (selectedDates.length === 2) {
-            setDateRange([selectedDates[0], selectedDates[1]]);
-            updateQueryParams({
-              startDate: selectedDates[0].toISOString().split("T")[0],
-              endDate: selectedDates[1].toISOString().split("T")[0],
-            });
-          } else if (selectedDates.length === 0) {
-            setDateRange([null, null]);
-            updateQueryParams({ startDate: null, endDate: null });
-          }
-        },
-      });
+      if (!fpInstance.current) {
+        fpInstance.current = flatpickr(datePickerRef.current, {
+          mode: "range",
+          dateFormat: "Y-m-d",
+          defaultDate:
+            startDateParam && endDateParam
+              ? [startDateParam, endDateParam]
+              : undefined,
+          onChange: (selectedDates) => {
+            if (selectedDates.length === 2) {
+              const startStr = flatpickr.formatDate(selectedDates[0], "Y-m-d");
+              const endStr = flatpickr.formatDate(selectedDates[1], "Y-m-d");
+              setDateRange([selectedDates[0], selectedDates[1]]);
+              updateQueryParams({
+                startDate: startStr,
+                endDate: endStr,
+              });
+            } else if (selectedDates.length === 0) {
+              setDateRange([null, null]);
+              updateQueryParams({ startDate: null, endDate: null });
+            }
+          },
+        });
+      } else if (startDateParam && endDateParam) {
+        fpInstance.current.setDate([startDateParam, endDateParam], false);
+      }
     }
 
     return () => {
       if (fpInstance.current) {
         fpInstance.current.destroy();
+        fpInstance.current = null;
       }
     };
-  }, []);
+  }, [startDateParam, endDateParam]);
 
   // Handler Reset Khusus Tanggal
   const handleResetDate = () => {
@@ -213,10 +220,8 @@ function OrdersContent() {
     return Array.from(new Set(products)).sort();
   }, [orders]);
 
-  // Filter Data Orders
+  // Filter Data Orders berdasarkan State / URL Params
   const filteredOrders = useMemo(() => {
-    const [startDate, endDate] = dateRange;
-
     return orders.filter((o) => {
       const matchesSearch =
         !searchQuery ||
@@ -227,16 +232,14 @@ function OrdersContent() {
       orderDate.setHours(0, 0, 0, 0);
 
       let matchesStartDate = true;
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
+      if (startDateParam) {
+        const start = new Date(`${startDateParam}T00:00:00`);
         matchesStartDate = orderDate >= start;
       }
 
       let matchesEndDate = true;
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
+      if (endDateParam) {
+        const end = new Date(`${endDateParam}T23:59:59`);
         matchesEndDate = orderDate <= end;
       }
 
@@ -272,7 +275,8 @@ function OrdersContent() {
   }, [
     orders,
     searchQuery,
-    dateRange,
+    startDateParam,
+    endDateParam,
     selectedProduct,
     selectedPaidStatus,
     selectedShippingMethod,
@@ -458,7 +462,8 @@ function OrdersContent() {
 
   const isAnyFilterActive =
     searchQuery ||
-    dateRange[0] ||
+    startDateParam ||
+    endDateParam ||
     selectedProduct ||
     selectedPaidStatus ||
     selectedShippingMethod ||
@@ -701,7 +706,7 @@ function OrdersContent() {
                         </p>
                       </td>
 
-                      {/* Pemesan (Nama Pemesan & Nama dalam Design) */}
+                      {/* Pemesan */}
                       <td className="px-4 py-4 whitespace-nowrap">
                         <p className="font-medium text-gray-800 dark:text-white whitespace-nowrap">
                           {order.customer_name}
