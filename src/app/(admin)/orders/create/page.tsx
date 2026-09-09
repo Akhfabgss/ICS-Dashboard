@@ -42,6 +42,9 @@ export default function CreateOrderPage() {
     const [staffList, setStaffList] = useState<UserProfile[]>([]);
 
     // Form States
+    const [orderDate, setOrderDate] = useState<string>(
+        new Date().toISOString().split("T")[0]
+    );
     const [customerName, setCustomerName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
     const [address, setAddress] = useState("");
@@ -66,7 +69,9 @@ export default function CreateOrderPage() {
 
     useEffect(() => {
         const fetchMasterData = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
             if (session?.user) {
                 const { data: profile } = await supabase
                     .from("profiles")
@@ -81,7 +86,8 @@ export default function CreateOrderPage() {
             const [prodRes, addRes, staffRes] = await Promise.all([
                 supabase.from("products").select("id, name, price").order("name"),
                 supabase.from("add_ons").select("id, name, price").order("name"),
-                supabase.from("profiles")
+                supabase
+                    .from("profiles")
                     .select("id, full_name, email, role")
                     .order("full_name"),
             ]);
@@ -99,7 +105,10 @@ export default function CreateOrderPage() {
     }, []);
 
     const normalizedRole = (userRole || "").toLowerCase().trim();
-    const isFinanceVisible = normalizedRole !== "staff" && normalizedRole !== "designer" && normalizedRole !== "";
+    const isFinanceVisible =
+        normalizedRole !== "staff" &&
+        normalizedRole !== "designer" &&
+        normalizedRole !== "";
 
     const handleProductSelect = (selectedName: string) => {
         setProductName(selectedName);
@@ -114,7 +123,9 @@ export default function CreateOrderPage() {
         }
 
         setSelectedAddons((prev) =>
-            prev.includes(addonName) ? prev.filter((a) => a !== addonName) : [...prev, addonName]
+            prev.includes(addonName)
+                ? prev.filter((a) => a !== addonName)
+                : [...prev, addonName]
         );
     };
 
@@ -136,7 +147,11 @@ export default function CreateOrderPage() {
         e.preventDefault();
 
         if (!productName.trim()) {
-            Swal.fire("Peringatan", "Pilih produk frame terlebih dahulu!", "warning");
+            Swal.fire(
+                "Peringatan",
+                "Pilih produk frame terlebih dahulu!",
+                "warning"
+            );
             return;
         }
 
@@ -162,6 +177,7 @@ export default function CreateOrderPage() {
 
         const payload: Record<string, unknown> = {
             order_number: orderNumber,
+            order_date: orderDate,
             customer_name: customerName.trim(),
             phone_number: phoneNumber.trim(),
             address,
@@ -188,9 +204,17 @@ export default function CreateOrderPage() {
         setLoading(false);
 
         if (error) {
-            Swal.fire("Error", "Gagal menyimpan pesanan: " + error.message, "error");
+            Swal.fire(
+                "Error",
+                "Gagal menyimpan pesanan: " + error.message,
+                "error"
+            );
         } else {
-            Swal.fire("Berhasil!", "Pesanan baru telah berhasil ditambahkan.", "success");
+            Swal.fire(
+                "Berhasil!",
+                "Pesanan baru telah berhasil ditambahkan.",
+                "success"
+            );
             router.push("/orders");
         }
     };
@@ -207,18 +231,26 @@ export default function CreateOrderPage() {
                     <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-200" />
                 </button>
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Buat Pesanan Baru</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Isi formulir lengkap pemesanan produk Framelo.</p>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+                        Buat Pesanan Baru
+                    </h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Isi formulir lengkap pemesanan produk Framelo.
+                    </p>
                 </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* 1. DATA PEMESAN */}
                 <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                    <h3 className="font-bold text-gray-800 dark:text-white text-base">1. Informasi Pemesan</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <h3 className="font-bold text-gray-800 dark:text-white text-base">
+                        1. Informasi Pemesan
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Nama Pemesan *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Nama Pemesan *
+                            </label>
                             <input
                                 type="text"
                                 required
@@ -228,7 +260,24 @@ export default function CreateOrderPage() {
                             />
                         </div>
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">No. WhatsApp *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Tanggal Order *
+                            </label>
+                            <div className="relative w-full">
+                                <input
+                                    type="date"
+                                    required
+                                    value={orderDate}
+                                    onChange={(e) => setOrderDate(e.target.value)}
+                                    onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-medium cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                No. WhatsApp *
+                            </label>
                             <input
                                 type="text"
                                 required
@@ -240,7 +289,9 @@ export default function CreateOrderPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Alamat Pengiriman</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Alamat Pengiriman
+                            </label>
                             <textarea
                                 rows={2}
                                 value={address}
@@ -249,7 +300,9 @@ export default function CreateOrderPage() {
                             />
                         </div>
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Tipe / Kurir Pengiriman *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Tipe / Kurir Pengiriman *
+                            </label>
                             <select
                                 value={shippingMethod}
                                 onChange={(e) => setShippingMethod(e.target.value)}
@@ -267,10 +320,14 @@ export default function CreateOrderPage() {
 
                 {/* 2. PRODUK & ADD-ONS */}
                 <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                    <h3 className="font-bold text-gray-800 dark:text-white text-base">2. Pilihan Produk &amp; Add-ons</h3>
+                    <h3 className="font-bold text-gray-800 dark:text-white text-base">
+                        2. Pilihan Produk &amp; Add-ons
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Kategori Desain *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Kategori Desain *
+                            </label>
                             <select
                                 value={category}
                                 onChange={(e) => setCategory(e.target.value)}
@@ -284,7 +341,9 @@ export default function CreateOrderPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Pilih Produk Frame *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Pilih Produk Frame *
+                            </label>
                             <select
                                 value={productName}
                                 onChange={(e) => handleProductSelect(e.target.value)}
@@ -292,13 +351,18 @@ export default function CreateOrderPage() {
                             >
                                 {productList.map((p) => (
                                     <option key={p.id} value={p.name}>
-                                        {p.name} {isFinanceVisible ? `(Rp ${p.price.toLocaleString("id-ID")})` : ""}
+                                        {p.name}{" "}
+                                        {isFinanceVisible
+                                            ? `(Rp ${p.price.toLocaleString("id-ID")})`
+                                            : ""}
                                     </option>
                                 ))}
                             </select>
                         </div>
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Order Lewat *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Order Lewat *
+                            </label>
                             <select
                                 value={orderSource}
                                 onChange={(e) => setOrderSource(e.target.value)}
@@ -315,13 +379,19 @@ export default function CreateOrderPage() {
 
                     {/* ADD-ONS SECTION */}
                     <div>
-                        <label className="block font-medium mb-2 text-sm dark:text-gray-200">Pilih Tambahan / Add-ons</label>
+                        <label className="block font-medium mb-2 text-sm dark:text-gray-200">
+                            Pilih Tambahan / Add-ons
+                        </label>
                         {addonList.length === 0 ? (
-                            <p className="text-sm text-gray-400">Belum ada item add-on di database.</p>
+                            <p className="text-sm text-gray-400">
+                                Belum ada item add-on di database.
+                            </p>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {addonList.map((item) => {
-                                    const isPhotoAddon = item.name.toLowerCase().includes("foto");
+                                    const isPhotoAddon = item.name
+                                        .toLowerCase()
+                                        .includes("foto");
 
                                     if (isPhotoAddon) {
                                         return (
@@ -336,7 +406,9 @@ export default function CreateOrderPage() {
                                                     <input
                                                         type="checkbox"
                                                         checked={isExtraPhotoChecked}
-                                                        onChange={() => setIsExtraPhotoChecked(!isExtraPhotoChecked)}
+                                                        onChange={() =>
+                                                            setIsExtraPhotoChecked(!isExtraPhotoChecked)
+                                                        }
                                                         className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                                                     />
                                                     <span>Tambah foto</span>
@@ -348,11 +420,19 @@ export default function CreateOrderPage() {
                                                             type="number"
                                                             min="1"
                                                             value={extraPhotoCount}
-                                                            onChange={(e) => setExtraPhotoCount(Math.max(1, Number(e.target.value)))}
+                                                            onChange={(e) =>
+                                                                setExtraPhotoCount(
+                                                                    Math.max(1, Number(e.target.value))
+                                                                )
+                                                            }
                                                             className="w-20 rounded-lg border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-bold"
                                                         />
                                                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                            foto {isFinanceVisible && ` (+Rp ${extraPhotoPrice.toLocaleString("id-ID")})`}
+                                                            foto{" "}
+                                                            {isFinanceVisible &&
+                                                                ` (+Rp ${extraPhotoPrice.toLocaleString(
+                                                                    "id-ID"
+                                                                )})`}
                                                         </span>
                                                     </div>
                                                 )}
@@ -375,7 +455,10 @@ export default function CreateOrderPage() {
                                                 className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                                             />
                                             <span>
-                                                {item.name} {isFinanceVisible ? `(+Rp ${item.price.toLocaleString("id-ID")})` : ""}
+                                                {item.name}{" "}
+                                                {isFinanceVisible
+                                                    ? `(+Rp ${item.price.toLocaleString("id-ID")})`
+                                                    : ""}
                                             </span>
                                         </label>
                                     );
@@ -388,10 +471,14 @@ export default function CreateOrderPage() {
                 {/* 3. RINCIAN KEUANGAN */}
                 {isFinanceVisible && (
                     <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                        <h3 className="font-bold text-gray-800 dark:text-white text-base">3. Rincian Pembayaran</h3>
+                        <h3 className="font-bold text-gray-800 dark:text-white text-base">
+                            3. Rincian Pembayaran
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Harga Frame (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Harga Frame (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={framePrice}
@@ -400,7 +487,9 @@ export default function CreateOrderPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Ongkir (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Ongkir (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={shippingFee}
@@ -410,7 +499,9 @@ export default function CreateOrderPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Diskon (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Diskon (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={discountAmount}
@@ -422,7 +513,9 @@ export default function CreateOrderPage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm pt-2">
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Bayar DP (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Bayar DP (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={dpAmount}
@@ -431,7 +524,9 @@ export default function CreateOrderPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Pelunasan (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Pelunasan (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={repaymentAmount}
@@ -443,10 +538,18 @@ export default function CreateOrderPage() {
                         <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex justify-between text-sm font-semibold">
                             <span className="text-gray-800 dark:text-gray-200">
                                 Total Harga: Rp {totalPrice.toLocaleString("id-ID")}
-                                {discountAmount > 0 && ` (Potongan Rp ${discountAmount.toLocaleString("id-ID")})`}
+                                {discountAmount > 0 &&
+                                    ` (Potongan Rp ${discountAmount.toLocaleString("id-ID")})`}
                             </span>
-                            <span className={remainingPayment <= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}>
-                                Sisa: Rp {remainingPayment.toLocaleString("id-ID")} ({remainingPayment <= 0 ? "LUNAS" : "BELUM LUNAS"})
+                            <span
+                                className={
+                                    remainingPayment <= 0
+                                        ? "text-emerald-500 dark:text-emerald-400"
+                                        : "text-rose-500 dark:text-rose-400"
+                                }
+                            >
+                                Sisa: Rp {remainingPayment.toLocaleString("id-ID")}{" "}
+                                ({remainingPayment <= 0 ? "LUNAS" : "BELUM LUNAS"})
                             </span>
                         </div>
                     </div>
@@ -460,7 +563,9 @@ export default function CreateOrderPage() {
                         </h3>
                         <button
                             type="button"
-                            onClick={() => setDesignFields([...designFields, { key: "", value: "" }])}
+                            onClick={() =>
+                                setDesignFields([...designFields, { key: "", value: "" }])
+                            }
                             className="text-sm font-semibold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
                         >
                             <Plus className="w-4 h-4" /> Tambah Poin Custom
@@ -493,7 +598,11 @@ export default function CreateOrderPage() {
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => setDesignFields(designFields.filter((_, i) => i !== index))}
+                                    onClick={() =>
+                                        setDesignFields(
+                                            designFields.filter((_, i) => i !== index)
+                                        )
+                                    }
                                     className="p-2 text-rose-500 hover:text-rose-700 cursor-pointer"
                                 >
                                     <Trash2 className="w-4 h-4" />

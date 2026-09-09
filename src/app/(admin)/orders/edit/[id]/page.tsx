@@ -55,6 +55,9 @@ export default function EditOrderPage() {
 
     // Form States
     const [orderNumber, setOrderNumber] = useState("");
+    const [orderDate, setOrderDate] = useState<string>(
+        new Date().toISOString().split("T")[0]
+    );
     const [customerName, setCustomerName] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
     const [address, setAddress] = useState("");
@@ -81,10 +84,15 @@ export default function EditOrderPage() {
         const fetchData = async () => {
             setLoading(true);
 
-            const { data: { session } } = await supabase.auth.getSession();
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
             if (session?.user) {
                 const { data: profile } = await supabase
-                    .from("profiles").select("role").eq("id", session.user.id).single();
+                    .from("profiles")
+                    .select("role")
+                    .eq("id", session.user.id)
+                    .single();
                 if (profile?.role) {
                     setUserRole(String(profile.role).toLowerCase().trim());
                 }
@@ -94,7 +102,8 @@ export default function EditOrderPage() {
                 supabase.from("products").select("id, name, price").order("name"),
                 supabase.from("add_ons").select("id, name, price").order("name"),
                 supabase.from("orders").select("*").eq("id", orderId).single(),
-                supabase.from("profiles")
+                supabase
+                    .from("profiles")
                     .select("id, full_name, email, role")
                     .order("full_name"),
             ]);
@@ -113,6 +122,15 @@ export default function EditOrderPage() {
             if (orderRes.data) {
                 const o = orderRes.data;
                 setOrderNumber(o.order_number || "");
+
+                // Fetch order_date (fallback ke created_at jika null)
+                const initialDate = o.order_date
+                    ? o.order_date
+                    : o.created_at
+                        ? new Date(o.created_at).toISOString().split("T")[0]
+                        : new Date().toISOString().split("T")[0];
+                setOrderDate(initialDate);
+
                 setCustomerName(o.customer_name || "");
                 setPhoneNumber(o.phone_number || "");
                 setAddress(o.address || "");
@@ -152,7 +170,8 @@ export default function EditOrderPage() {
                 if (o.design_data) {
                     try {
                         const parsed = JSON.parse(o.design_data);
-                        if (Array.isArray(parsed) && parsed.length > 0) setDesignFields(parsed);
+                        if (Array.isArray(parsed) && parsed.length > 0)
+                            setDesignFields(parsed);
                     } catch {
                         setDesignFields(DEFAULT_DESIGN_FIELDS);
                     }
@@ -169,7 +188,10 @@ export default function EditOrderPage() {
     }, [orderId, router]);
 
     const normalizedRole = (userRole || "").toLowerCase().trim();
-    const isFinanceVisible = normalizedRole !== "staff" && normalizedRole !== "designer" && normalizedRole !== "";
+    const isFinanceVisible =
+        normalizedRole !== "staff" &&
+        normalizedRole !== "designer" &&
+        normalizedRole !== "";
 
     const handleProductSelect = (selectedName: string) => {
         setProductName(selectedName);
@@ -184,7 +206,9 @@ export default function EditOrderPage() {
         }
 
         setSelectedAddons((prev) =>
-            prev.includes(addonName) ? prev.filter((a) => a !== addonName) : [...prev, addonName]
+            prev.includes(addonName)
+                ? prev.filter((a) => a !== addonName)
+                : [...prev, addonName]
         );
     };
 
@@ -229,6 +253,7 @@ export default function EditOrderPage() {
             .single();
 
         const basePayload: Record<string, unknown> = {
+            order_date: orderDate,
             customer_name: customerName.trim(),
             phone_number: phoneNumber.trim(),
             address,
@@ -250,18 +275,26 @@ export default function EditOrderPage() {
             basePayload.repayment_amount = repaymentAmount;
         }
 
-        const { error } = await supabase.from("orders").update(basePayload).eq("id", orderId);
+        const { error } = await supabase
+            .from("orders")
+            .update(basePayload)
+            .eq("id", orderId);
 
         if (error) {
             setSubmitting(false);
-            Swal.fire("Error", "Gagal memperbarui pesanan: " + error.message, "error");
+            Swal.fire(
+                "Error",
+                "Gagal memperbarui pesanan: " + error.message,
+                "error"
+            );
             return;
         }
 
         if (
             oldOrder &&
             (oldOrder.status === "Selesai" || oldOrder.status === "Done") &&
-            oldOrder.product_name.trim().toLowerCase() !== productName.trim().toLowerCase()
+            oldOrder.product_name.trim().toLowerCase() !==
+            productName.trim().toLowerCase()
         ) {
             try {
                 const { data: oldProd } = await supabase
@@ -283,7 +316,9 @@ export default function EditOrderPage() {
                             .select("id, item_name")
                             .in("id", invIds);
 
-                        const invMap = new Map(invItems?.map((i) => [i.id, i.item_name]));
+                        const invMap = new Map(
+                            invItems?.map((i) => [i.id, i.item_name])
+                        );
                         const rollbackMutations: MutationItem[] = [];
 
                         oldRecipes.forEach((r) => {
@@ -300,7 +335,9 @@ export default function EditOrderPage() {
                         });
 
                         if (rollbackMutations.length > 0) {
-                            await supabase.from("inventory").insert(rollbackMutations);
+                            await supabase
+                                .from("inventory")
+                                .insert(rollbackMutations);
                         }
                     }
                 }
@@ -324,7 +361,9 @@ export default function EditOrderPage() {
                             .select("id, item_name")
                             .in("id", invIds);
 
-                        const invMap = new Map(invItems?.map((i) => [i.id, i.item_name]));
+                        const invMap = new Map(
+                            invItems?.map((i) => [i.id, i.item_name])
+                        );
                         const deductMutations: MutationItem[] = [];
 
                         newRecipes.forEach((r) => {
@@ -341,7 +380,9 @@ export default function EditOrderPage() {
                         });
 
                         if (deductMutations.length > 0) {
-                            await supabase.from("inventory").insert(deductMutations);
+                            await supabase
+                                .from("inventory")
+                                .insert(deductMutations);
                         }
                     }
                 }
@@ -351,12 +392,20 @@ export default function EditOrderPage() {
         }
 
         setSubmitting(false);
-        Swal.fire("Berhasil!", "Data pesanan berhasil diperbarui.", "success");
+        Swal.fire(
+            "Berhasil!",
+            "Data pesanan berhasil diperbarui.",
+            "success"
+        );
         router.push("/orders");
     };
 
     if (loading) {
-        return <div className="p-6 text-center text-gray-500 dark:text-gray-400">Memuat data pesanan...</div>;
+        return (
+            <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                Memuat data pesanan...
+            </div>
+        );
     }
 
     return (
@@ -371,18 +420,26 @@ export default function EditOrderPage() {
                     <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-200" />
                 </button>
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Edit Pesanan ({orderNumber})</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Perbarui data pesanan produk dan rincian transaksi.</p>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+                        Edit Pesanan ({orderNumber})
+                    </h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Perbarui data pesanan produk dan rincian transaksi.
+                    </p>
                 </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* 1. DATA PEMESAN */}
                 <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                    <h3 className="font-bold text-gray-800 dark:text-white text-base">1. Informasi Pemesan</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <h3 className="font-bold text-gray-800 dark:text-white text-base">
+                        1. Informasi Pemesan
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Nama Pemesan *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Nama Pemesan *
+                            </label>
                             <input
                                 type="text"
                                 required
@@ -391,8 +448,29 @@ export default function EditOrderPage() {
                                 className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500"
                             />
                         </div>
+
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">No. WhatsApp *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Tanggal Order *
+                            </label>
+                            <div className="relative w-full">
+                                <input
+                                    type="date"
+                                    required
+                                    value={orderDate}
+                                    onChange={(e) => setOrderDate(e.target.value)}
+                                    onClick={(e) =>
+                                        (e.target as HTMLInputElement).showPicker?.()
+                                    }
+                                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-medium cursor-pointer [color-scheme:light] dark:[color-scheme:dark]"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                No. WhatsApp *
+                            </label>
                             <input
                                 type="text"
                                 required
@@ -401,8 +479,11 @@ export default function EditOrderPage() {
                                 className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500"
                             />
                         </div>
+
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Dikerjakan Oleh</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Dikerjakan Oleh
+                            </label>
                             <select
                                 value={assignedTo}
                                 onChange={(e) => setAssignedTo(e.target.value)}
@@ -417,9 +498,12 @@ export default function EditOrderPage() {
                             </select>
                         </div>
                     </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Alamat Pengiriman</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Alamat Pengiriman
+                            </label>
                             <textarea
                                 rows={2}
                                 value={address}
@@ -428,7 +512,9 @@ export default function EditOrderPage() {
                             />
                         </div>
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Tipe / Kurir Pengiriman *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Tipe / Kurir Pengiriman *
+                            </label>
                             <select
                                 value={shippingMethod}
                                 onChange={(e) => setShippingMethod(e.target.value)}
@@ -446,10 +532,14 @@ export default function EditOrderPage() {
 
                 {/* 2. PRODUK & ADD-ONS */}
                 <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                    <h3 className="font-bold text-gray-800 dark:text-white text-base">2. Pilihan Produk &amp; Add-ons</h3>
+                    <h3 className="font-bold text-gray-800 dark:text-white text-base">
+                        2. Pilihan Produk &amp; Add-ons
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Kategori Desain *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Kategori Desain *
+                            </label>
                             <select
                                 value={category}
                                 onChange={(e) => setCategory(e.target.value)}
@@ -463,7 +553,9 @@ export default function EditOrderPage() {
                             </select>
                         </div>
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Pilih Produk Frame *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Pilih Produk Frame *
+                            </label>
                             <select
                                 value={productName}
                                 onChange={(e) => handleProductSelect(e.target.value)}
@@ -471,13 +563,18 @@ export default function EditOrderPage() {
                             >
                                 {productList.map((p) => (
                                     <option key={p.id} value={p.name}>
-                                        {p.name} {isFinanceVisible ? `(Rp ${p.price.toLocaleString("id-ID")})` : ""}
+                                        {p.name}{" "}
+                                        {isFinanceVisible
+                                            ? `(Rp ${p.price.toLocaleString("id-ID")})`
+                                            : ""}
                                     </option>
                                 ))}
                             </select>
                         </div>
                         <div>
-                            <label className="block font-medium mb-1 dark:text-gray-200">Order Lewat *</label>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Order Lewat *
+                            </label>
                             <select
                                 value={orderSource}
                                 onChange={(e) => setOrderSource(e.target.value)}
@@ -491,26 +588,33 @@ export default function EditOrderPage() {
                             </select>
                         </div>
                     </div>
+
                     <div>
-                        <label className="block font-medium mb-2 text-sm dark:text-gray-200">Pilih Tambahan / Add-ons</label>
+                        <label className="block font-medium mb-2 text-sm dark:text-gray-200">
+                            Pilih Tambahan / Add-ons
+                        </label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {addonList.map((item) => {
-                                const isPhotoAddon = item.name.toLowerCase().includes("foto");
+                                const isPhotoAddon = item.name
+                                    .toLowerCase()
+                                    .includes("foto");
 
                                 if (isPhotoAddon) {
                                     return (
                                         <div
                                             key={item.id}
                                             className={`p-3 rounded-xl border transition-colors ${isExtraPhotoChecked
-                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10"
-                                                : "border-gray-200 dark:border-gray-800"
+                                                    ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10"
+                                                    : "border-gray-200 dark:border-gray-800"
                                                 }`}
                                         >
                                             <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium dark:text-gray-200">
                                                 <input
                                                     type="checkbox"
                                                     checked={isExtraPhotoChecked}
-                                                    onChange={() => setIsExtraPhotoChecked(!isExtraPhotoChecked)}
+                                                    onChange={() =>
+                                                        setIsExtraPhotoChecked(!isExtraPhotoChecked)
+                                                    }
                                                     className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                                                 />
                                                 <span>Tambah foto</span>
@@ -522,11 +626,19 @@ export default function EditOrderPage() {
                                                         type="number"
                                                         min="1"
                                                         value={extraPhotoCount}
-                                                        onChange={(e) => setExtraPhotoCount(Math.max(1, Number(e.target.value)))}
+                                                        onChange={(e) =>
+                                                            setExtraPhotoCount(
+                                                                Math.max(1, Number(e.target.value))
+                                                            )
+                                                        }
                                                         className="w-20 rounded-lg border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-bold"
                                                     />
                                                     <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                        foto {isFinanceVisible && ` (+Rp ${extraPhotoPrice.toLocaleString("id-ID")})`}
+                                                        foto{" "}
+                                                        {isFinanceVisible &&
+                                                            ` (+Rp ${extraPhotoPrice.toLocaleString(
+                                                                "id-ID"
+                                                            )})`}
                                                     </span>
                                                 </div>
                                             )}
@@ -538,8 +650,8 @@ export default function EditOrderPage() {
                                     <label
                                         key={item.id}
                                         className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-sm transition-colors ${selectedAddons.includes(item.name)
-                                            ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium dark:text-white"
-                                            : "border-gray-200 dark:border-gray-800 dark:text-gray-300"
+                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium dark:text-white"
+                                                : "border-gray-200 dark:border-gray-800 dark:text-gray-300"
                                             }`}
                                     >
                                         <input
@@ -549,7 +661,10 @@ export default function EditOrderPage() {
                                             className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                                         />
                                         <span>
-                                            {item.name} {isFinanceVisible ? `(+Rp ${item.price.toLocaleString("id-ID")})` : ""}
+                                            {item.name}{" "}
+                                            {isFinanceVisible
+                                                ? `(+Rp ${item.price.toLocaleString("id-ID")})`
+                                                : ""}
                                         </span>
                                     </label>
                                 );
@@ -561,10 +676,14 @@ export default function EditOrderPage() {
                 {/* 3. RINCIAN KEUANGAN */}
                 {isFinanceVisible && (
                     <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
-                        <h3 className="font-bold text-gray-800 dark:text-white text-base">3. Rincian Pembayaran</h3>
+                        <h3 className="font-bold text-gray-800 dark:text-white text-base">
+                            3. Rincian Pembayaran
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Harga Frame (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Harga Frame (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={framePrice}
@@ -573,7 +692,9 @@ export default function EditOrderPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Ongkir (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Ongkir (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={shippingFee}
@@ -583,7 +704,9 @@ export default function EditOrderPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Diskon (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Diskon (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={discountAmount}
@@ -595,7 +718,9 @@ export default function EditOrderPage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm pt-2">
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Bayar DP (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Bayar DP (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={dpAmount}
@@ -604,7 +729,9 @@ export default function EditOrderPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block font-medium mb-1 dark:text-gray-200">Pelunasan (Rp)</label>
+                                <label className="block font-medium mb-1 dark:text-gray-200">
+                                    Pelunasan (Rp)
+                                </label>
                                 <input
                                     type="number"
                                     value={repaymentAmount}
@@ -616,10 +743,18 @@ export default function EditOrderPage() {
                         <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 flex justify-between text-sm font-semibold">
                             <span className="text-gray-800 dark:text-gray-200">
                                 Total Harga: Rp {totalPrice.toLocaleString("id-ID")}
-                                {discountAmount > 0 && ` (Potongan Rp ${discountAmount.toLocaleString("id-ID")})`}
+                                {discountAmount > 0 &&
+                                    ` (Potongan Rp ${discountAmount.toLocaleString("id-ID")})`}
                             </span>
-                            <span className={remainingPayment <= 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"}>
-                                Sisa: Rp {remainingPayment.toLocaleString("id-ID")} ({remainingPayment <= 0 ? "LUNAS" : "BELUM LUNAS"})
+                            <span
+                                className={
+                                    remainingPayment <= 0
+                                        ? "text-emerald-500 dark:text-emerald-400"
+                                        : "text-rose-500 dark:text-rose-400"
+                                }
+                            >
+                                Sisa: Rp {remainingPayment.toLocaleString("id-ID")}{" "}
+                                ({remainingPayment <= 0 ? "LUNAS" : "BELUM LUNAS"})
                             </span>
                         </div>
                     </div>
@@ -633,7 +768,9 @@ export default function EditOrderPage() {
                         </h3>
                         <button
                             type="button"
-                            onClick={() => setDesignFields([...designFields, { key: "", value: "" }])}
+                            onClick={() =>
+                                setDesignFields([...designFields, { key: "", value: "" }])
+                            }
                             className="text-sm font-semibold text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
                         >
                             <Plus className="w-4 h-4" /> Tambah Poin Custom
@@ -666,7 +803,11 @@ export default function EditOrderPage() {
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => setDesignFields(designFields.filter((_, i) => i !== index))}
+                                    onClick={() =>
+                                        setDesignFields(
+                                            designFields.filter((_, i) => i !== index)
+                                        )
+                                    }
                                     className="p-2 text-rose-500 hover:text-rose-700 cursor-pointer"
                                 >
                                     <Trash2 className="w-4 h-4" />

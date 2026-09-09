@@ -223,7 +223,7 @@ function OrdersContent() {
         o.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         o.order_number.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const orderDate = new Date(o.created_at);
+      const orderDate = new Date(o.order_date || o.created_at);
       orderDate.setHours(0, 0, 0, 0);
 
       let matchesStartDate = true;
@@ -697,7 +697,7 @@ function OrdersContent() {
                           {order.order_number}
                         </p>
                         <p className="text-xs text-gray-500 whitespace-nowrap">
-                          {new Date(order.created_at).toLocaleDateString("id-ID")}
+                          {new Date(order.order_date || order.created_at).toLocaleDateString("id-ID")}
                         </p>
                       </td>
 
@@ -736,8 +736,8 @@ function OrdersContent() {
                             </p>
                             <span
                               className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${order.is_paid_off
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                  : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                                 }`}
                             >
                               {order.is_paid_off
@@ -750,8 +750,8 @@ function OrdersContent() {
                         ) : (
                           <span
                             className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full whitespace-nowrap ${order.is_paid_off
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                               }`}
                           >
                             {order.is_paid_off ? "LUNAS" : "BELUM LUNAS"}
