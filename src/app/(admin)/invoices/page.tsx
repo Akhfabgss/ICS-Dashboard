@@ -1,22 +1,92 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import { Order } from "@/types/order";
 import InvoicePrintModal from "@/components/invoices/InvoicePrintModal";
 import { Printer, CheckSquare, Square } from "lucide-react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import flatpickr from "flatpickr";
+import "flatpickr/dist/flatpickr.css";
+import { CalenderIcon } from "@/icons";
 
-export default function InvoicesPage() {
+function InvoicesContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
 
-  // State untuk menyimpan ID pesanan yang dicentang (Checkbox)
+  // State Filter dari URL Params
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
+
+  const startDateParam = searchParams.get("startDate");
+  const endDateParam = searchParams.get("endDate");
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => [
+    startDateParam ? new Date(`${startDateParam}T00:00:00`) : null,
+    endDateParam ? new Date(`${endDateParam}T00:00:00`) : null,
+  ]);
+
+  const datePickerRef = useRef<HTMLInputElement | null>(null);
+  const fpInstance = useRef<flatpickr.Instance | null>(null);
+
+  // State Checkbox & Modal Cetak
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-
-  // State untuk modal cetak
   const [ordersToPrint, setOrdersToPrint] = useState<Order[]>([]);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+
+  // Synchronize Query Params ke URL
+  const updateQueryParams = (newParams: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    });
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  // Inisialisasi Flatpickr
+  useEffect(() => {
+    if (datePickerRef.current) {
+      if (!fpInstance.current) {
+        fpInstance.current = flatpickr(datePickerRef.current, {
+          mode: "range",
+          dateFormat: "Y-m-d",
+          defaultDate:
+            startDateParam && endDateParam
+              ? [startDateParam, endDateParam]
+              : undefined,
+          onChange: (selectedDates) => {
+            if (selectedDates.length === 2) {
+              const startStr = flatpickr.formatDate(selectedDates[0], "Y-m-d");
+              const endStr = flatpickr.formatDate(selectedDates[1], "Y-m-d");
+              setDateRange([selectedDates[0], selectedDates[1]]);
+              updateQueryParams({
+                startDate: startStr,
+                endDate: endStr,
+              });
+            } else if (selectedDates.length === 0) {
+              setDateRange([null, null]);
+              updateQueryParams({ startDate: null, endDate: null });
+            }
+          },
+        });
+      } else if (startDateParam && endDateParam) {
+        fpInstance.current.setDate([startDateParam, endDateParam], false);
+      }
+    }
+
+    return () => {
+      if (fpInstance.current) {
+        fpInstance.current.destroy();
+        fpInstance.current = null;
+      }
+    };
+  }, [startDateParam, endDateParam]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -35,14 +105,44 @@ export default function InvoicesPage() {
     fetchOrders();
   }, []);
 
-  // Filter daftar pesanan berdasarkan pencarian
+  // Filter Data Pesanan berdasarkan Search Query dan Date Range (order_date || created_at)
   const filteredOrders = useMemo(() => {
-    return orders.filter(
-      (order) =>
+    return orders.filter((order) => {
+      // 1. Filter Pencarian Text
+      const matchesSearch =
+        !searchQuery ||
         order.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        order.customer_name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [orders, searchQuery]);
+        order.customer_name.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // 2. Filter Tanggal Pesanan (order_date dengan fallback created_at)
+      const orderDate = new Date(order.order_date || order.created_at);
+      orderDate.setHours(0, 0, 0, 0);
+
+      let matchesStartDate = true;
+      if (startDateParam) {
+        const start = new Date(`${startDateParam}T00:00:00`);
+        matchesStartDate = orderDate >= start;
+      }
+
+      let matchesEndDate = true;
+      if (endDateParam) {
+        const end = new Date(`${endDateParam}T23:59:59`);
+        matchesEndDate = orderDate <= end;
+      }
+
+      return matchesSearch && matchesStartDate && matchesEndDate;
+    });
+  }, [orders, searchQuery, startDateParam, endDateParam]);
+
+  // Handler Reset Filters
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setDateRange([null, null]);
+    if (fpInstance.current) {
+      fpInstance.current.clear();
+    }
+    router.replace(pathname, { scroll: false });
+  };
 
   // Handler Checkbox Item Individu
   const toggleSelectOrder = (id: string) => {
@@ -53,20 +153,20 @@ export default function InvoicesPage() {
 
   // Handler Select All / Deselect All
   const toggleSelectAll = () => {
-    if (selectedOrderIds.length === filteredOrders.length) {
+    if (selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0) {
       setSelectedOrderIds([]);
     } else {
       setSelectedOrderIds(filteredOrders.map((o) => o.id));
     }
   };
 
-  // 1. Cetak Single Order dari Tombol Aksi Tabel
+  // Cetak Single Order
   const handlePrintSingle = (order: Order) => {
     setOrdersToPrint([order]);
     setIsInvoiceOpen(true);
   };
 
-  // 2. Cetak Pilihan (Selected Checkboxes)
+  // Cetak Selected Checkboxes
   const handlePrintSelected = () => {
     const selectedList = orders.filter((o) => selectedOrderIds.includes(o.id));
     if (selectedList.length > 0) {
@@ -74,6 +174,8 @@ export default function InvoicesPage() {
       setIsInvoiceOpen(true);
     }
   };
+
+  const isAnyFilterActive = searchQuery || startDateParam || endDateParam;
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -89,27 +191,51 @@ export default function InvoicesPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          {/* BARIS TOMBOL CETAK PILIHAN (HANYA MUNCUL JIKA ADA YANG DICENTANG) */}
+          {/* BARIS TOMBOL CETAK PILIHAN */}
           {selectedOrderIds.length > 0 && (
             <button
               onClick={handlePrintSelected}
               type="button"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-black dark:text-white font-bold text-xs shadow-md transition-all cursor-pointer border border-purple-700 dark:border-purple-500"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer border border-purple-700 dark:border-purple-500"
             >
-              <Printer className="w-4 h-4 dark:text-white" />
-              <span className=" dark:text-white">
+              <Printer className="w-4 h-4 text-white" />
+              <span>
                 Cetak Gabungan ({selectedOrderIds.length} Order)
               </span>
             </button>
           )}
 
+          {/* RENTANG TANGGAL */}
+          <div className="relative w-full sm:w-56 min-w-0">
+            <CalenderIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none z-10 w-6 h-6" />
+            <input
+              ref={datePickerRef}
+              className="h-9 w-full pl-9 pr-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-medium text-gray-700 outline-none dark:text-gray-300 cursor-pointer focus:border-brand-500 truncate"
+              placeholder="Pilih rentang tanggal..."
+            />
+          </div>
+
+          {/* SEARCH INPUT */}
           <input
             type="text"
             placeholder="Cari No. Order / Nama Customer..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full sm:w-64 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-xs outline-none focus:border-brand-500 dark:text-white"
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              updateQueryParams({ search: e.target.value || null });
+            }}
+            className="w-full sm:w-60 h-9 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-xs outline-none focus:border-brand-500 dark:text-white"
           />
+
+          {/* TOMBOL RESET FILTER */}
+          {isAnyFilterActive && (
+            <button
+              onClick={handleResetFilters}
+              className="text-xs text-rose-500 hover:underline font-semibold cursor-pointer whitespace-nowrap self-center"
+            >
+              Reset Filter
+            </button>
+          )}
         </div>
       </div>
 
@@ -151,7 +277,9 @@ export default function InvoicesPage() {
               ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-6 text-gray-500">
-                    Tidak ada tagihan invoice ditemukan.
+                    {isAnyFilterActive
+                      ? "Tidak ada tagihan invoice yang sesuai dengan filter."
+                      : "Belum ada tagihan invoice ditemukan."}
                   </td>
                 </tr>
               ) : (
@@ -180,7 +308,7 @@ export default function InvoicesPage() {
                           #{order.order_number}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {new Date(order.created_at).toLocaleDateString("id-ID")}
+                          {new Date(order.order_date || order.created_at).toLocaleDateString("id-ID")}
                         </p>
                       </td>
                       <td className="px-4 py-3">
@@ -193,7 +321,7 @@ export default function InvoicesPage() {
                         {order.product_name}
                       </td>
                       <td className="px-4 py-3 font-semibold text-gray-800 dark:text-white">
-                        Rp {order.total_price.toLocaleString("id-ID")}
+                        Rp {Number(order.total_price || 0).toLocaleString("id-ID")}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -208,7 +336,7 @@ export default function InvoicesPage() {
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => handlePrintSingle(order)}
-                          className="px-3 py-1 text-xs font-semibold rounded-lg bg-brand-50 hover:bg-brand-100 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 transition-colors"
+                          className="px-3 py-1 text-xs font-semibold rounded-lg bg-brand-50 hover:bg-brand-100 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 transition-colors cursor-pointer"
                         >
                           🖨️ Cetak Satuan
                         </button>
@@ -230,4 +358,12 @@ export default function InvoicesPage() {
       />
     </div>
   );
-} 
+}
+
+export default function InvoicesPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-xs text-gray-400">Memuat halaman invoice...</div>}>
+      <InvoicesContent />
+    </Suspense>
+  );
+}
