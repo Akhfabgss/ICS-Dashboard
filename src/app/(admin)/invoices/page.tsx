@@ -10,6 +10,15 @@ import flatpickr from "flatpickr";
 import "flatpickr/dist/flatpickr.css";
 import { CalenderIcon } from "@/icons";
 
+// Key khusus localStorage untuk halaman Invoices
+const INVOICES_STORAGE_KEY = "invoices_page_filters";
+
+interface SavedInvoiceFilters {
+  searchQuery?: string;
+  startDateParam?: string;
+  endDateParam?: string;
+}
+
 function InvoicesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -18,11 +27,30 @@ function InvoicesContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // State Filter dari URL Params
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
+  // Helper untuk membaca nilai awal (Prioritas: URL Params -> LocalStorage -> "")
+  const getInitialValue = (paramKey: keyof SavedInvoiceFilters) => {
+    const urlValue = searchParams.get(paramKey);
+    if (urlValue !== null) return urlValue;
 
-  const startDateParam = searchParams.get("startDate");
-  const endDateParam = searchParams.get("endDate");
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(INVOICES_STORAGE_KEY);
+        if (saved) {
+          const parsed: SavedInvoiceFilters = JSON.parse(saved);
+          return parsed[paramKey] || "";
+        }
+      } catch (e) {
+        console.error("Gagal membaca filter dari localStorage", e);
+      }
+    }
+    return "";
+  };
+
+  // State Filter
+  const [searchQuery, setSearchQuery] = useState(() => getInitialValue("searchQuery"));
+  const [startDateParam, setStartDateParam] = useState(() => getInitialValue("startDateParam"));
+  const [endDateParam, setEndDateParam] = useState(() => getInitialValue("endDateParam"));
+
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => [
     startDateParam ? new Date(`${startDateParam}T00:00:00`) : null,
     endDateParam ? new Date(`${endDateParam}T00:00:00`) : null,
@@ -36,20 +64,27 @@ function InvoicesContent() {
   const [ordersToPrint, setOrdersToPrint] = useState<Order[]>([]);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
 
-  // Synchronize Query Params ke URL
-  const updateQueryParams = (newParams: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(newParams).forEach(([key, value]) => {
-      if (value) {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-    });
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
+  // Efek untuk menyimpan semua state filter ke LocalStorage dan URL Params
+  useEffect(() => {
+    const filtersToSave: SavedInvoiceFilters = {
+      searchQuery,
+      startDateParam,
+      endDateParam,
+    };
 
-  // Inisialisasi Flatpickr
+    // 1. Simpan ke LocalStorage
+    localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(filtersToSave));
+
+    // 2. Simpan ke URL Search Params
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("searchQuery", searchQuery);
+    if (startDateParam) params.set("startDateParam", startDateParam);
+    if (endDateParam) params.set("endDateParam", endDateParam);
+
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [searchQuery, startDateParam, endDateParam, pathname, router]);
+
+  // Inisialisasi & Sync Flatpickr
   useEffect(() => {
     if (datePickerRef.current) {
       if (!fpInstance.current) {
@@ -65,13 +100,12 @@ function InvoicesContent() {
               const startStr = flatpickr.formatDate(selectedDates[0], "Y-m-d");
               const endStr = flatpickr.formatDate(selectedDates[1], "Y-m-d");
               setDateRange([selectedDates[0], selectedDates[1]]);
-              updateQueryParams({
-                startDate: startStr,
-                endDate: endStr,
-              });
+              setStartDateParam(startStr);
+              setEndDateParam(endStr);
             } else if (selectedDates.length === 0) {
               setDateRange([null, null]);
-              updateQueryParams({ startDate: null, endDate: null });
+              setStartDateParam("");
+              setEndDateParam("");
             }
           },
         });
@@ -137,10 +171,15 @@ function InvoicesContent() {
   // Handler Reset Filters
   const handleResetFilters = () => {
     setSearchQuery("");
+    setStartDateParam("");
+    setEndDateParam("");
     setDateRange([null, null]);
+
     if (fpInstance.current) {
       fpInstance.current.clear();
     }
+
+    localStorage.removeItem(INVOICES_STORAGE_KEY);
     router.replace(pathname, { scroll: false });
   };
 
@@ -220,10 +259,7 @@ function InvoicesContent() {
             type="text"
             placeholder="Cari No. Order / Nama Customer..."
             value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              updateQueryParams({ search: e.target.value || null });
-            }}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full sm:w-60 h-9 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 text-xs outline-none focus:border-brand-500 dark:text-white"
           />
 
@@ -290,8 +326,8 @@ function InvoicesContent() {
                     <tr
                       key={order.id}
                       className={`transition-colors ${isChecked
-                        ? "bg-brand-50/40 dark:bg-brand-500/10"
-                        : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                          ? "bg-brand-50/40 dark:bg-brand-500/10"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
                         }`}
                     >
                       {/* CHECKBOX PER BARIS */}
@@ -326,8 +362,8 @@ function InvoicesContent() {
                       <td className="px-4 py-3">
                         <span
                           className={`inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full ${order.is_paid_off
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                             }`}
                         >
                           {order.is_paid_off ? "LUNAS" : "BELUM LUNAS"}

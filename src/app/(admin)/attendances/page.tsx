@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import RoleGuard from "@/components/auth/RoleGuard";
 import flatpickr from "flatpickr";
 import "flatpickr/dist/flatpickr.css";
-import { Users, AlertTriangle, Clock, Trash2 } from "lucide-react";
+import { Users, Clock, Trash2 } from "lucide-react";
 import { CalenderIcon } from "@/icons";
 import Swal from "sweetalert2";
 
@@ -18,7 +18,7 @@ interface AttendanceRecord {
     rawDate: Date;
     clock_in: string | null;
     clock_out: string | null;
-    status: "Hadir" | "Terlambat" | "Izin" | "Alpha";
+    status: "Hadir" | "Tidak Hadir";
     durationStr: string;
 }
 
@@ -33,7 +33,13 @@ export default function AttendancesPage() {
 function AttendanceContent() {
     const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
     const [loading, setLoading] = useState(true);
-    const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
+
+    // Set default rentang tanggal ke HARI INI (Today)
+    const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => {
+        const today = new Date();
+        return [today, today];
+    });
+
     const [selectedStatus, setSelectedStatus] = useState<string>("Semua");
 
     // State Modal Hapus Massal per Bulan
@@ -51,6 +57,7 @@ function AttendanceContent() {
             fpInstance.current = flatpickr(datePickerRef.current, {
                 mode: "range",
                 dateFormat: "Y-m-d",
+                defaultDate: [new Date(), new Date()], // Set input date picker ke Hari Ini
                 onChange: (selectedDates) => {
                     if (selectedDates.length === 2) {
                         setDateRange([selectedDates[0], selectedDates[1]]);
@@ -73,6 +80,14 @@ function AttendanceContent() {
         setDateRange([null, null]);
     };
 
+    const handleSelectToday = () => {
+        const today = new Date();
+        if (fpInstance.current) {
+            fpInstance.current.setDate([today, today]);
+        }
+        setDateRange([today, today]);
+    };
+
     const fetchAttendances = async () => {
         setLoading(true);
 
@@ -93,6 +108,14 @@ function AttendanceContent() {
                     durationStr = `${hours}j ${mins}m`;
                 }
 
+                const rawStatus = (item.status || "").toLowerCase().trim();
+                const hasClockIn = Boolean(item.clock_in);
+
+                let normalizedStatus: "Hadir" | "Tidak Hadir" = "Tidak Hadir";
+                if (hasClockIn || rawStatus === "hadir" || rawStatus === "terlambat") {
+                    normalizedStatus = "Hadir";
+                }
+
                 return {
                     id: item.id,
                     user_id: item.user_id,
@@ -110,7 +133,7 @@ function AttendanceContent() {
                     clock_out: item.clock_out
                         ? new Date(item.clock_out).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB"
                         : "-",
-                    status: item.status || "Hadir",
+                    status: normalizedStatus,
                     durationStr,
                 };
             });
@@ -180,7 +203,7 @@ function AttendanceContent() {
         }
     };
 
-    // Filter List
+    // Filter List Berdasarkan Filter Status & Rentang Tanggal
     const filteredAttendances = useMemo(() => {
         const [startDate, endDate] = dateRange;
 
@@ -208,10 +231,29 @@ function AttendanceContent() {
         });
     }, [attendances, dateRange, selectedStatus]);
 
-    // Summary Cards
-    const totalHadir = filteredAttendances.filter((a) => a.status === "Hadir").length;
-    const totalTerlambat = filteredAttendances.filter((a) => a.status === "Terlambat").length;
-    const totalIzin = filteredAttendances.filter((a) => a.status === "Izin" || a.status === "Alpha").length;
+    // Dynamic Summary Cards: Dihitung secara otomatis dari hasil filter tanggal yang aktif
+    const totalHadir = useMemo(() => {
+        return filteredAttendances.filter((a) => a.status === "Hadir").length;
+    }, [filteredAttendances]);
+
+    const totalTidakHadir = useMemo(() => {
+        return filteredAttendances.filter((a) => a.status === "Tidak Hadir").length;
+    }, [filteredAttendances]);
+
+    // Label Keterangan Tanggal pada Cards
+    const datePeriodLabel = useMemo(() => {
+        const [start, end] = dateRange;
+        if (!start && !end) return "Semua Periode";
+        if (start && end && start.toDateString() === end.toDateString()) {
+            const today = new Date();
+            if (start.toDateString() === today.toDateString()) return "Hari Ini";
+            return start.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+        }
+        if (start && end) {
+            return `${start.toLocaleDateString("id-ID", { day: "numeric", month: "short" })} - ${end.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`;
+        }
+        return "Periode Terfilter";
+    }, [dateRange]);
 
     return (
         <div className="p-4 sm:p-6 space-y-6 text-gray-800 dark:text-white">
@@ -223,25 +265,17 @@ function AttendanceContent() {
                 </p>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Dynamic Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center gap-4 shadow-xs">
                     <div className="p-3 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 rounded-xl">
                         <Users className="w-6 h-6" />
                     </div>
                     <div>
-                        <span className="text-xs font-medium uppercase text-gray-400">Total Hadir</span>
+                        <span className="text-xs font-medium uppercase text-gray-400">
+                            Total Hadir ({datePeriodLabel})
+                        </span>
                         <h3 className="text-2xl font-bold text-emerald-600">{totalHadir} Presensi</h3>
-                    </div>
-                </div>
-
-                <div className="p-5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center gap-4 shadow-xs">
-                    <div className="p-3 bg-amber-100 dark:bg-amber-500/20 text-amber-600 rounded-xl">
-                        <AlertTriangle className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <span className="text-xs font-medium uppercase text-gray-400">Terlambat</span>
-                        <h3 className="text-2xl font-bold text-amber-500">{totalTerlambat} Pegawai</h3>
                     </div>
                 </div>
 
@@ -250,8 +284,10 @@ function AttendanceContent() {
                         <Clock className="w-6 h-6" />
                     </div>
                     <div>
-                        <span className="text-xs font-medium uppercase text-gray-400">Izin / Alpha</span>
-                        <h3 className="text-2xl font-bold text-rose-500">{totalIzin} Keterangan</h3>
+                        <span className="text-xs font-medium uppercase text-gray-400">
+                            Tidak Hadir ({datePeriodLabel})
+                        </span>
+                        <h3 className="text-2xl font-bold text-rose-500">{totalTidakHadir} Presensi</h3>
                     </div>
                 </div>
             </div>
@@ -268,12 +304,19 @@ function AttendanceContent() {
                         />
                     </div>
 
+                    <button
+                        onClick={handleSelectToday}
+                        className="px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                        Hari Ini
+                    </button>
+
                     {dateRange[0] && (
                         <button
                             onClick={handleResetDate}
                             className="text-xs text-rose-500 hover:underline font-medium cursor-pointer"
                         >
-                            Reset
+                            Tampilkan Semua Tanggal
                         </button>
                     )}
                 </div>
@@ -281,13 +324,13 @@ function AttendanceContent() {
                 <div className="flex flex-wrap items-center gap-3">
                     {/* FILTER STATUS */}
                     <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-medium dark:bg-gray-800">
-                        {["Semua", "Hadir", "Terlambat", "Izin"].map((st) => (
+                        {["Semua", "Hadir", "Tidak Hadir"].map((st) => (
                             <button
                                 key={st}
                                 onClick={() => setSelectedStatus(st)}
                                 className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${selectedStatus === st
-                                    ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
-                                    : "text-gray-500"
+                                        ? "bg-white text-gray-800 shadow-xs dark:bg-gray-700 dark:text-white font-bold"
+                                        : "text-gray-500"
                                     }`}
                             >
                                 {st}
@@ -295,7 +338,7 @@ function AttendanceContent() {
                         ))}
                     </div>
 
-                    {/* TOMBOL Buka Modal Hapus 1 Bulan (Tampil Bersih Tanpa Input Tanggal Menumpuk) */}
+                    {/* TOMBOL HAPUS 1 BULAN */}
                     <button
                         onClick={() => setIsDeleteModalOpen(true)}
                         className="h-9 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-rose-200 dark:border-rose-900/50"
@@ -349,9 +392,7 @@ function AttendanceContent() {
                                         <td className="p-3 text-center">
                                             <span
                                                 className={`px-2.5 py-0.5 rounded-full font-bold text-xs uppercase ${row.status === "Hadir"
-                                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                                    : row.status === "Terlambat"
-                                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                                         : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                                                     }`}
                                             >
@@ -404,7 +445,7 @@ function AttendanceContent() {
                             </p>
                         </div>
 
-                        {/* FOOTER BUTTONS - FIX KONTRAS DAN POSISI */}
+                        {/* FOOTER BUTTONS */}
                         <div className="flex justify-end items-center gap-2 pt-4 border-t border-gray-100 dark:border-gray-700">
                             <button
                                 type="button"
@@ -417,9 +458,9 @@ function AttendanceContent() {
                                 type="button"
                                 disabled={deleting || !targetMonth}
                                 onClick={handleConfirmDeleteMonth}
-                                className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-70 dark:bg-rose-600 dark:hover:bg-rose-700 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                                className="px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 dark:bg-rose-600 dark:hover:bg-rose-700 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                             >
-                                <Trash2 className="w-3.5 h-3.5 text-gray-500 dark:text-white" />
+                                <Trash2 className="w-3.5 h-3.5 text-white" />
                                 <span>{deleting ? "Menghapus..." : "Hapus Permanen"}</span>
                             </button>
                         </div>

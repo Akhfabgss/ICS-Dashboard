@@ -12,6 +12,19 @@ import "flatpickr/dist/flatpickr.css";
 import { CalenderIcon } from "@/icons";
 import { deductStockForOrder } from "@/lib/stockDeduction";
 
+// Key untuk localStorage
+const STORAGE_KEY = "orders_page_filters";
+
+interface SavedFilters {
+  searchQuery?: string;
+  selectedProduct?: string;
+  selectedPaidStatus?: string;
+  selectedShippingMethod?: string;
+  selectedAssignee?: string;
+  startDateParam?: string;
+  endDateParam?: string;
+}
+
 // Helper function untuk mengambil nilai 'Nama dalam Design' dari design_data
 function parseNamaDalamDesign(designData: string | null | undefined): string {
   if (!designData) return "-";
@@ -73,16 +86,36 @@ function OrdersContent() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<UserProfile[]>([]);
 
-  // Filter States dari URL Search Params
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
-  const [selectedProduct, setSelectedProduct] = useState(() => searchParams.get("product") || "");
-  const [selectedPaidStatus, setSelectedPaidStatus] = useState(() => searchParams.get("paidStatus") || "");
-  const [selectedShippingMethod, setSelectedShippingMethod] = useState(() => searchParams.get("shipping") || "");
-  const [selectedAssignee, setSelectedAssignee] = useState(() => searchParams.get("assignee") || "");
+  // Helper untuk membaca nilai awal (Prioritas: URL Params -> LocalStorage -> "")
+  const getInitialValue = (paramKey: keyof SavedFilters) => {
+    const urlValue = searchParams.get(paramKey);
+    if (urlValue !== null) return urlValue;
 
-  // Inisialisasi Rentang Tanggal dari URL Params (String Format YYYY-MM-DD)
-  const startDateParam = searchParams.get("startDate");
-  const endDateParam = searchParams.get("endDate");
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed: SavedFilters = JSON.parse(saved);
+          return parsed[paramKey] || "";
+        }
+      } catch (e) {
+        console.error("Gagal membaca filter dari localStorage", e);
+      }
+    }
+    return "";
+  };
+
+  // Filter States
+  const [searchQuery, setSearchQuery] = useState(() => getInitialValue("searchQuery"));
+  const [selectedProduct, setSelectedProduct] = useState(() => getInitialValue("selectedProduct"));
+  const [selectedPaidStatus, setSelectedPaidStatus] = useState(() => getInitialValue("selectedPaidStatus"));
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState(() => getInitialValue("selectedShippingMethod"));
+  const [selectedAssignee, setSelectedAssignee] = useState(() => getInitialValue("selectedAssignee"));
+
+  // Inisialisasi Rentang Tanggal
+  const [startDateParam, setStartDateParam] = useState(() => getInitialValue("startDateParam"));
+  const [endDateParam, setEndDateParam] = useState(() => getInitialValue("endDateParam"));
+
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => [
     startDateParam ? new Date(`${startDateParam}T00:00:00`) : null,
     endDateParam ? new Date(`${endDateParam}T00:00:00`) : null,
@@ -91,20 +124,45 @@ function OrdersContent() {
   const datePickerRef = useRef<HTMLInputElement | null>(null);
   const fpInstance = useRef<flatpickr.Instance | null>(null);
 
-  // Update Query Params di URL
-  const updateQueryParams = (newParams: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(newParams).forEach(([key, value]) => {
-      if (value) {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-    });
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
+  // Efek untuk menyimpan semua state filter ke LocalStorage dan URL Params secara bersamaan
+  useEffect(() => {
+    const filtersToSave: SavedFilters = {
+      searchQuery,
+      selectedProduct,
+      selectedPaidStatus,
+      selectedShippingMethod,
+      selectedAssignee,
+      startDateParam,
+      endDateParam,
+    };
 
-  // Inisialisasi & Sync Flatpickr saat mount/URL Params berubah
+    // 1. Simpan ke LocalStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtersToSave));
+
+    // 2. Simpan ke URL Search Params
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("searchQuery", searchQuery);
+    if (selectedProduct) params.set("selectedProduct", selectedProduct);
+    if (selectedPaidStatus) params.set("selectedPaidStatus", selectedPaidStatus);
+    if (selectedShippingMethod) params.set("selectedShippingMethod", selectedShippingMethod);
+    if (selectedAssignee) params.set("selectedAssignee", selectedAssignee);
+    if (startDateParam) params.set("startDateParam", startDateParam);
+    if (endDateParam) params.set("endDateParam", endDateParam);
+
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [
+    searchQuery,
+    selectedProduct,
+    selectedPaidStatus,
+    selectedShippingMethod,
+    selectedAssignee,
+    startDateParam,
+    endDateParam,
+    pathname,
+    router,
+  ]);
+
+  // Inisialisasi & Sync Flatpickr
   useEffect(() => {
     if (datePickerRef.current) {
       if (!fpInstance.current) {
@@ -120,13 +178,12 @@ function OrdersContent() {
               const startStr = flatpickr.formatDate(selectedDates[0], "Y-m-d");
               const endStr = flatpickr.formatDate(selectedDates[1], "Y-m-d");
               setDateRange([selectedDates[0], selectedDates[1]]);
-              updateQueryParams({
-                startDate: startStr,
-                endDate: endStr,
-              });
+              setStartDateParam(startStr);
+              setEndDateParam(endStr);
             } else if (selectedDates.length === 0) {
               setDateRange([null, null]);
-              updateQueryParams({ startDate: null, endDate: null });
+              setStartDateParam("");
+              setEndDateParam("");
             }
           },
         });
@@ -143,22 +200,22 @@ function OrdersContent() {
     };
   }, [startDateParam, endDateParam]);
 
-  // Handler Reset Khusus Tanggal
-  const handleResetDate = () => {
-    setDateRange([null, null]);
-    if (fpInstance.current) {
-      fpInstance.current.clear();
-    }
-  };
-
-  // Handler Reset Semua Filter
+  // Handler Reset Semua Filter & Hapus dari LocalStorage
   const handleResetFilters = () => {
-    handleResetDate();
     setSearchQuery("");
     setSelectedProduct("");
     setSelectedPaidStatus("");
     setSelectedShippingMethod("");
     setSelectedAssignee("");
+    setStartDateParam("");
+    setEndDateParam("");
+    setDateRange([null, null]);
+
+    if (fpInstance.current) {
+      fpInstance.current.clear();
+    }
+
+    localStorage.removeItem(STORAGE_KEY);
     router.replace(pathname, { scroll: false });
   };
 
@@ -220,7 +277,7 @@ function OrdersContent() {
     return Array.from(new Set(products)).sort();
   }, [orders]);
 
-  // Filter Data Orders berdasarkan State / URL Params
+  // Filter Data Orders berdasarkan State
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       const matchesSearch =
@@ -539,10 +596,7 @@ function OrdersContent() {
             type="text"
             placeholder="Cari nama / no. order..."
             value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              updateQueryParams({ search: e.target.value || null });
-            }}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="h-10 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3.5 text-xs outline-none focus:border-brand-500 dark:text-white"
           />
 
@@ -561,10 +615,7 @@ function OrdersContent() {
             {/* Filter 1: Produk */}
             <select
               value={selectedProduct}
-              onChange={(e) => {
-                setSelectedProduct(e.target.value);
-                updateQueryParams({ product: e.target.value || null });
-              }}
+              onChange={(e) => setSelectedProduct(e.target.value)}
               className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
             >
               <option value="">Semua Produk</option>
@@ -578,10 +629,7 @@ function OrdersContent() {
             {/* Filter 2: Status Bayar */}
             <select
               value={selectedPaidStatus}
-              onChange={(e) => {
-                setSelectedPaidStatus(e.target.value);
-                updateQueryParams({ paidStatus: e.target.value || null });
-              }}
+              onChange={(e) => setSelectedPaidStatus(e.target.value)}
               className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
             >
               <option value="">Semua Status Bayar</option>
@@ -592,10 +640,7 @@ function OrdersContent() {
             {/* Filter 3: Kurir */}
             <select
               value={selectedShippingMethod}
-              onChange={(e) => {
-                setSelectedShippingMethod(e.target.value);
-                updateQueryParams({ shipping: e.target.value || null });
-              }}
+              onChange={(e) => setSelectedShippingMethod(e.target.value)}
               className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
             >
               <option value="">Semua Kurir</option>
@@ -609,10 +654,7 @@ function OrdersContent() {
             {/* Filter 4: Staf */}
             <select
               value={selectedAssignee}
-              onChange={(e) => {
-                setSelectedAssignee(e.target.value);
-                updateQueryParams({ assignee: e.target.value || null });
-              }}
+              onChange={(e) => setSelectedAssignee(e.target.value)}
               className="h-9 flex-1 w-full min-w-0 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 text-xs text-gray-700 dark:text-gray-300 outline-none focus:border-brand-500 cursor-pointer truncate"
             >
               <option value="">Semua Staf</option>
@@ -741,8 +783,8 @@ function OrdersContent() {
                             </p>
                             <span
                               className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${order.is_paid_off
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                  : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                                 }`}
                             >
                               {order.is_paid_off
@@ -755,8 +797,8 @@ function OrdersContent() {
                         ) : (
                           <span
                             className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full whitespace-nowrap ${order.is_paid_off
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                              : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                               }`}
                           >
                             {order.is_paid_off ? "LUNAS" : "BELUM LUNAS"}
