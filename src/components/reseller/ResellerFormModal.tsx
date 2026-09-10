@@ -35,7 +35,6 @@ export default function ResellerFormModal({
   const [resellerName, setResellerName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [frameType, setFrameType] = useState("");
-  const [orderSource, setOrderSource] = useState("WhatsApp");
   const [commission, setCommission] = useState<number>(0);
   const [status, setStatus] = useState<ResellerStatus>("Dalam Daftar");
   const [notes, setNotes] = useState("");
@@ -58,7 +57,6 @@ export default function ResellerFormModal({
       setResellerName(itemToEdit.reseller_name || "");
       setCustomerName(itemToEdit.customer_name || "");
       setFrameType(itemToEdit.frame_type || "");
-      setOrderSource(itemToEdit.order_source || "WhatsApp");
       setCommission(Number(itemToEdit.commission || 0));
       setStatus(itemToEdit.status || "Dalam Daftar");
       setNotes(itemToEdit.notes || "");
@@ -68,7 +66,6 @@ export default function ResellerFormModal({
       setResellerName("");
       setCustomerName("");
       setFrameType("");
-      setOrderSource("WhatsApp");
       setCommission(0);
       setStatus("Dalam Daftar");
       setNotes("");
@@ -87,7 +84,6 @@ export default function ResellerFormModal({
       reseller_name: resellerName.trim(),
       customer_name: customerName.trim(),
       frame_type: frameType,
-      order_source: orderSource,
       status,
       notes: notes.trim(),
     };
@@ -191,38 +187,21 @@ export default function ResellerFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block font-medium mb-1 dark:text-gray-200">Order Lewat *</label>
-              <select
-                value={orderSource}
-                onChange={(e) => setOrderSource(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 cursor-pointer"
-              >
-                <option value="WhatsApp">WhatsApp</option>
-                <option value="Instagram">Instagram</option>
-                <option value="Shopee">Shopee</option>
-                <option value="Tokopedia">Tokopedia</option>
-                <option value="TikTok Shop">TikTok Shop</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-medium mb-1 dark:text-gray-200">Pilih Tipe Bingkai (Produk) *</label>
-              <select
-                required
-                value={frameType}
-                onChange={(e) => setFrameType(e.target.value)}
-                className="w-full rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium cursor-pointer"
-              >
-                <option value="">— Pilih Produk Bingkai —</option>
-                {productList.map((p) => (
-                  <option key={p.id} value={p.name}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block font-medium mb-1 dark:text-gray-200">Pilih Tipe Bingkai (Produk) *</label>
+            <select
+              required
+              value={frameType}
+              onChange={(e) => setFrameType(e.target.value)}
+              className="w-full rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium cursor-pointer"
+            >
+              <option value="">— Pilih Produk Bingkai —</option>
+              {productList.map((p) => (
+                <option key={p.id} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

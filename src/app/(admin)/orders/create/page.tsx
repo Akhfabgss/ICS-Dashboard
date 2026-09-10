@@ -373,6 +373,7 @@ export default function CreateOrderPage() {
                                 <option value="Shopee">Shopee</option>
                                 <option value="Tokopedia">Tokopedia</option>
                                 <option value="TikTok Shop">TikTok Shop</option>
+                                <option value="Reseller">Reseller</option>
                             </select>
                         </div>
                     </div>

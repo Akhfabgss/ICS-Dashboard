@@ -16,7 +16,6 @@ export interface ResellerOrder {
   customer_name: string;
   frame_type: string;
   commission: number;
-  order_source?: string | null;
   status: ResellerStatus;
   assigned_to?: string | null;
   notes?: string | null;

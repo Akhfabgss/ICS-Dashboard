@@ -84,8 +84,7 @@ function ResellerContent() {
       (r) =>
         r.reseller_name.toLowerCase().includes(query) ||
         r.customer_name.toLowerCase().includes(query) ||
-        r.frame_type.toLowerCase().includes(query) ||
-        (r.order_source && r.order_source.toLowerCase().includes(query))
+        r.frame_type.toLowerCase().includes(query)
     );
   }, [resellerOrders, searchQuery]);
 
@@ -242,7 +241,6 @@ function ResellerContent() {
                 <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[130px]">Tgl Pengerjaan</th>
                 <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[120px]">Reseller</th>
                 <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[160px]">Customer</th>
-                <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[130px]">Order Lewat</th>
                 <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[220px]">Tipe Bingkai</th>
                 {isFinanceVisible && (
                   <th className="px-4 py-3.5 font-medium text-right whitespace-nowrap min-w-[120px]">Komisi</th>
@@ -254,13 +252,13 @@ function ResellerContent() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={isFinanceVisible ? 9 : 8} className="text-center py-6 whitespace-nowrap">
+                  <td colSpan={isFinanceVisible ? 8 : 7} className="text-center py-6 whitespace-nowrap">
                     Memuat data order reseller...
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={isFinanceVisible ? 9 : 8} className="text-center py-6 text-gray-500 whitespace-nowrap">
+                  <td colSpan={isFinanceVisible ? 8 : 7} className="text-center py-6 text-gray-500 whitespace-nowrap">
                     {searchQuery ? "Tidak ada data reseller yang cocok." : "Belum ada transaksi order reseller."}
                   </td>
                 </tr>
@@ -283,12 +281,6 @@ function ResellerContent() {
 
                     <td className="px-4 py-3 font-medium text-gray-800 dark:text-white whitespace-nowrap">
                       {item.customer_name}
-                    </td>
-
-                    <td className="px-4 py-3 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                      <span className="inline-block px-2.5 py-0.5 text-xs font-semibold rounded-md bg-gray-100 dark:bg-gray-800 dark:text-gray-200">
-                        {item.order_source || "WhatsApp"}
-                      </span>
                     </td>
 
                     <td className="px-4 py-3 font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
