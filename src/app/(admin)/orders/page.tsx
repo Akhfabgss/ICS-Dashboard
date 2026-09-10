@@ -12,7 +12,6 @@ import "flatpickr/dist/flatpickr.css";
 import { CalenderIcon } from "@/icons";
 import { deductStockForOrder } from "@/lib/stockDeduction";
 
-// Key untuk localStorage
 const STORAGE_KEY = "orders_page_filters";
 
 interface SavedFilters {
@@ -25,13 +24,10 @@ interface SavedFilters {
   endDateParam?: string;
 }
 
-// Helper function untuk mengambil nilai 'Nama dalam Design' dari design_data
 function parseNamaDalamDesign(designData: string | null | undefined): string {
   if (!designData) return "-";
-
   try {
     const parsed = JSON.parse(designData);
-
     if (Array.isArray(parsed)) {
       const match = parsed.find(
         (item) =>
@@ -40,7 +36,6 @@ function parseNamaDalamDesign(designData: string | null | undefined): string {
           item.value &&
           item.value.trim() !== ""
       );
-
       if (match) return match.value.trim();
 
       const fallbackMatch = parsed.find(
@@ -52,7 +47,6 @@ function parseNamaDalamDesign(designData: string | null | undefined): string {
       );
       if (fallbackMatch) return fallbackMatch.value.trim();
     }
-
     if (typeof parsed === "object" && parsed !== null) {
       return (
         parsed["Nama dalam Design"] ||
@@ -72,7 +66,6 @@ function parseNamaDalamDesign(designData: string | null | undefined): string {
       }
     }
   }
-
   return designData.trim() || "-";
 }
 
@@ -86,46 +79,60 @@ function OrdersContent() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<UserProfile[]>([]);
 
-  // Helper untuk membaca nilai awal (Prioritas: URL Params -> LocalStorage -> "")
-  const getInitialValue = (paramKey: keyof SavedFilters) => {
-    const urlValue = searchParams.get(paramKey);
-    if (urlValue !== null) return urlValue;
+  // Filter States (Inisialisasi aman tanpa langsung menembak localStorage saat SSR)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [selectedPaidStatus, setSelectedPaidStatus] = useState("");
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState("");
+  const [selectedAssignee, setSelectedAssignee] = useState("");
+  const [startDateParam, setStartDateParam] = useState("");
+  const [endDateParam, setEndDateParam] = useState("");
 
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed: SavedFilters = JSON.parse(saved);
-          return parsed[paramKey] || "";
-        }
-      } catch (e) {
-        console.error("Gagal membaca filter dari localStorage", e);
-      }
-    }
-    return "";
-  };
-
-  // Filter States
-  const [searchQuery, setSearchQuery] = useState(() => getInitialValue("searchQuery"));
-  const [selectedProduct, setSelectedProduct] = useState(() => getInitialValue("selectedProduct"));
-  const [selectedPaidStatus, setSelectedPaidStatus] = useState(() => getInitialValue("selectedPaidStatus"));
-  const [selectedShippingMethod, setSelectedShippingMethod] = useState(() => getInitialValue("selectedShippingMethod"));
-  const [selectedAssignee, setSelectedAssignee] = useState(() => getInitialValue("selectedAssignee"));
-
-  // Inisialisasi Rentang Tanggal
-  const [startDateParam, setStartDateParam] = useState(() => getInitialValue("startDateParam"));
-  const [endDateParam, setEndDateParam] = useState(() => getInitialValue("endDateParam"));
-
-  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>(() => [
-    startDateParam ? new Date(`${startDateParam}T00:00:00`) : null,
-    endDateParam ? new Date(`${endDateParam}T00:00:00`) : null,
-  ]);
+  const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const datePickerRef = useRef<HTMLInputElement | null>(null);
   const fpInstance = useRef<flatpickr.Instance | null>(null);
 
-  // Efek untuk menyimpan semua state filter ke LocalStorage dan URL Params secara bersamaan
+  // 1. Dapatkan Filter Awal setelah Komponen Mount di Klien (Aman dari Crash)
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      let parsed: SavedFilters = {};
+      if (saved) {
+        parsed = JSON.parse(saved);
+      }
+
+      const search = searchParams.get("searchQuery") || parsed.searchQuery || "";
+      const prod = searchParams.get("selectedProduct") || parsed.selectedProduct || "";
+      const paid = searchParams.get("selectedPaidStatus") || parsed.selectedPaidStatus || "";
+      const ship = searchParams.get("selectedShippingMethod") || parsed.selectedShippingMethod || "";
+      const assign = searchParams.get("selectedAssignee") || parsed.selectedAssignee || "";
+      const start = searchParams.get("startDateParam") || parsed.startDateParam || "";
+      const end = searchParams.get("endDateParam") || parsed.endDateParam || "";
+
+      setSearchQuery(search);
+      setSelectedProduct(prod);
+      setSelectedPaidStatus(paid);
+      setSelectedShippingMethod(ship);
+      setSelectedAssignee(assign);
+      setStartDateParam(start);
+      setEndDateParam(end);
+
+      if (start && end) {
+        setDateRange([new Date(`${start}T00:00:00`), new Date(`${end}T00:00:00`)]);
+      }
+    } catch (err) {
+      console.error("Gagal parse localStorage:", err);
+    } finally {
+      setIsInitialized(true);
+    }
+  }, []);
+
+  // 2. Simpan ke LocalStorage & Sync URL (Hanya berjalan setelah Inisialisasi Selesai)
+  useEffect(() => {
+    if (!isInitialized) return;
+
     const filtersToSave: SavedFilters = {
       searchQuery,
       selectedProduct,
@@ -136,20 +143,11 @@ function OrdersContent() {
       endDateParam,
     };
 
-    // 1. Simpan ke LocalStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtersToSave));
-
-    // 2. Simpan ke URL Search Params
-    const params = new URLSearchParams();
-    if (searchQuery) params.set("searchQuery", searchQuery);
-    if (selectedProduct) params.set("selectedProduct", selectedProduct);
-    if (selectedPaidStatus) params.set("selectedPaidStatus", selectedPaidStatus);
-    if (selectedShippingMethod) params.set("selectedShippingMethod", selectedShippingMethod);
-    if (selectedAssignee) params.set("selectedAssignee", selectedAssignee);
-    if (startDateParam) params.set("startDateParam", startDateParam);
-    if (endDateParam) params.set("endDateParam", endDateParam);
-
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtersToSave));
+    } catch (e) {
+      console.error("Gagal menyimpan ke localStorage:", e);
+    }
   }, [
     searchQuery,
     selectedProduct,
@@ -158,12 +156,13 @@ function OrdersContent() {
     selectedAssignee,
     startDateParam,
     endDateParam,
-    pathname,
-    router,
+    isInitialized,
   ]);
 
   // Inisialisasi & Sync Flatpickr
   useEffect(() => {
+    if (!isInitialized) return;
+
     if (datePickerRef.current) {
       if (!fpInstance.current) {
         fpInstance.current = flatpickr(datePickerRef.current, {
@@ -198,9 +197,9 @@ function OrdersContent() {
         fpInstance.current = null;
       }
     };
-  }, [startDateParam, endDateParam]);
+  }, [startDateParam, endDateParam, isInitialized]);
 
-  // Handler Reset Semua Filter & Hapus dari LocalStorage
+  // Reset Filters
   const handleResetFilters = () => {
     setSearchQuery("");
     setSelectedProduct("");
@@ -215,7 +214,11 @@ function OrdersContent() {
       fpInstance.current.clear();
     }
 
-    localStorage.removeItem(STORAGE_KEY);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.error("Gagal hapus localStorage:", e);
+    }
     router.replace(pathname, { scroll: false });
   };
 
@@ -277,13 +280,13 @@ function OrdersContent() {
     return Array.from(new Set(products)).sort();
   }, [orders]);
 
-  // Filter Data Orders berdasarkan State
+  // Filter Data Orders
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       const matchesSearch =
         !searchQuery ||
-        o.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.order_number.toLowerCase().includes(searchQuery.toLowerCase());
+        (o.customer_name && o.customer_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (o.order_number && o.order_number.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const orderDate = new Date(o.order_date || o.created_at);
       orderDate.setHours(0, 0, 0, 0);
@@ -340,7 +343,6 @@ function OrdersContent() {
     selectedAssignee,
   ]);
 
-  // Statistik Dinamis Berdasarkan Filtered Orders
   const orderSummary = useMemo(() => {
     const totalOrders = filteredOrders.length;
     const paidOffOrders = filteredOrders.filter((o) => o.is_paid_off).length;
@@ -899,20 +901,16 @@ function OrdersContent() {
         </div>
       </div>
 
-      {/* FOOTER KETERANGAN TOTAL DATA */}
+      {/* FOOTER */}
       <div className="flex items-center justify-between border-gray-200 px-4 py-3 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
           {loading ? (
             "Memuat data..."
           ) : filteredOrders.length === 0 ? (
             "Menampilkan 0 data"
-          ) : isAnyFilterActive ? (
-            <>
-              Menampilkan <span className="font-semibold text-gray-800 dark:text-white">{filteredOrders.length}</span> Total orderan
-            </>
           ) : (
             <>
-              Menampilkan <span className="font-semibold text-gray-800 dark:text-white">{filteredOrders.length}</span> total orderan
+              Menampilkan <span className="font-semibold text-gray-800 dark:text-white">{filteredOrders.length}</span> Total orderan
             </>
           )}
         </p>

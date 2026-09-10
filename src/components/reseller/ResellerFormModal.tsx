@@ -35,9 +35,8 @@ export default function ResellerFormModal({
   const [resellerName, setResellerName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [frameType, setFrameType] = useState("");
+  const [orderSource, setOrderSource] = useState("WhatsApp");
   const [commission, setCommission] = useState<number>(0);
-
-  // DEFAULT STATUS DISIMPANG KE "Dalam Daftar"
   const [status, setStatus] = useState<ResellerStatus>("Dalam Daftar");
   const [notes, setNotes] = useState("");
 
@@ -59,6 +58,7 @@ export default function ResellerFormModal({
       setResellerName(itemToEdit.reseller_name || "");
       setCustomerName(itemToEdit.customer_name || "");
       setFrameType(itemToEdit.frame_type || "");
+      setOrderSource(itemToEdit.order_source || "WhatsApp");
       setCommission(Number(itemToEdit.commission || 0));
       setStatus(itemToEdit.status || "Dalam Daftar");
       setNotes(itemToEdit.notes || "");
@@ -68,6 +68,7 @@ export default function ResellerFormModal({
       setResellerName("");
       setCustomerName("");
       setFrameType("");
+      setOrderSource("WhatsApp");
       setCommission(0);
       setStatus("Dalam Daftar");
       setNotes("");
@@ -86,6 +87,7 @@ export default function ResellerFormModal({
       reseller_name: resellerName.trim(),
       customer_name: customerName.trim(),
       frame_type: frameType,
+      order_source: orderSource,
       status,
       notes: notes.trim(),
     };
@@ -103,9 +105,7 @@ export default function ResellerFormModal({
         .eq("id", itemToEdit.id);
       error = err;
     } else {
-      const { error: err } = await supabase
-        .from("resellers")
-        .insert([payload]);
+      const { error: err } = await supabase.from("resellers").insert([payload]);
       error = err;
     }
 
@@ -116,7 +116,7 @@ export default function ResellerFormModal({
     } else {
       Swal.fire(
         "Berhasil!",
-        `Data order reseller & pengeluaran komisi berhasil ${itemToEdit ? "diperbarui" : "dicatat"}.`,
+        `Data order reseller berhasil ${itemToEdit ? "diperbarui" : "dicatat"}.`,
         "success"
       );
       onSuccess();
@@ -175,7 +175,7 @@ export default function ResellerFormModal({
                 placeholder="misal: Ibnu"
                 value={resellerName}
                 onChange={(e) => setResellerName(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 outline-none focus:border-brand-500"
+                className="w-full rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 bg-transparent p-2.5 outline-none focus:border-brand-500"
               />
             </div>
             <div>
@@ -186,26 +186,43 @@ export default function ResellerFormModal({
                 placeholder="misal: Ahmad Adi Irawan"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 outline-none focus:border-brand-500"
+                className="w-full rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 bg-transparent p-2.5 outline-none focus:border-brand-500"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block font-medium mb-1 dark:text-gray-200">Pilih Tipe Bingkai (Produk) *</label>
-            <select
-              required
-              value={frameType}
-              onChange={(e) => setFrameType(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium cursor-pointer"
-            >
-              <option value="">— Pilih Produk Bingkai —</option>
-              {productList.map((p) => (
-                <option key={p.id} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-medium mb-1 dark:text-gray-200">Order Lewat *</label>
+              <select
+                value={orderSource}
+                onChange={(e) => setOrderSource(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 cursor-pointer"
+              >
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="Instagram">Instagram</option>
+                <option value="Shopee">Shopee</option>
+                <option value="Tokopedia">Tokopedia</option>
+                <option value="TikTok Shop">TikTok Shop</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-medium mb-1 dark:text-gray-200">Pilih Tipe Bingkai (Produk) *</label>
+              <select
+                required
+                value={frameType}
+                onChange={(e) => setFrameType(e.target.value)}
+                className="w-full rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium cursor-pointer"
+              >
+                <option value="">— Pilih Produk Bingkai —</option>
+                {productList.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -217,7 +234,7 @@ export default function ResellerFormModal({
                   value={commission}
                   onChange={(e) => setCommission(Number(e.target.value))}
                   placeholder="12000"
-                  className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 font-bold text-brand-600 dark:text-brand-400 outline-none focus:border-brand-500"
+                  className="w-full rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 bg-transparent p-2.5 font-bold text-brand-600 dark:text-brand-400 outline-none focus:border-brand-500"
                 />
               </div>
             )}
@@ -227,7 +244,7 @@ export default function ResellerFormModal({
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ResellerStatus)}
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium cursor-pointer"
+                className="w-full rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 outline-none focus:border-brand-500 font-medium cursor-pointer"
               >
                 <option value="Dalam Daftar">Dalam Daftar</option>
                 <option value="Pending">Pending</option>
@@ -247,7 +264,7 @@ export default function ResellerFormModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Catatan pengerjaan / pengiriman..."
-              className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 outline-none focus:border-brand-500"
+              className="w-full rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 bg-transparent p-2.5 outline-none focus:border-brand-500"
             />
           </div>
 
@@ -255,7 +272,7 @@ export default function ResellerFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+              className="px-5 py-2.5 rounded-xl border dark:text-gray-200 border-gray-300 dark:border-gray-700 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
             >
               Batal
             </button>
