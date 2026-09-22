@@ -768,8 +768,11 @@ function OrdersContent() {
                         <p className="font-medium text-gray-800 dark:text-white">
                           {order.product_name}
                         </p>
+                        <p className="text-[10px] text-gray-500">
+                          {order.category}
+                        </p>
                         {order.add_ons && order.add_ons.length > 0 && (
-                          <p className="text-xs text-gray-500 mt-0.5">
+                          <p className="text-[10px] text-gray-500 mt-0.5">
                             + {order.add_ons.join(", ")}
                           </p>
                         )}
