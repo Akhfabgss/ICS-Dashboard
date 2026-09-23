@@ -276,69 +276,67 @@ export default function OrderDetailPage() {
             </div>
 
             {/* 3. RINCIAN KEUANGAN */}
-            {isFinanceVisible && (
-                <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-xs">
-                    <h3 className="font-bold text-gray-800 dark:text-white text-base mb-2">
-                        3. Ringkasan Pembayaran
-                    </h3>
-                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                        <span>Harga Frame:</span>
-                        <span>
-                            Rp {Number(order.frame_price || 0).toLocaleString("id-ID")}
-                        </span>
-                    </div>
-                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                        <span>Harga Tambahan (Add-ons):</span>
-                        <span>
-                            Rp {Number(order.addons_price || 0).toLocaleString("id-ID")}
-                        </span>
-                    </div>
-                    <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                        <span>Ongkir:</span>
-                        <span>
-                            Rp {Number(order.shipping_fee || 0).toLocaleString("id-ID")}
-                        </span>
-                    </div>
-                    {Number(order.discount_amount || 0) > 0 && (
-                        <div className="flex justify-between text-sm text-rose-500 font-medium">
-                            <span>Diskon (Potongan):</span>
-                            <span>
-                                - Rp{" "}
-                                {Number(order.discount_amount || 0).toLocaleString("id-ID")}
+            {isFinanceVisible && (() => {
+                const framePrice = Number(order.frame_price || 0);
+                const addonsPrice = Number(order.addons_price || 0);
+                const shippingFee = Number(order.shipping_fee || 0);
+                const discountAmount = Number(order.discount_amount || 0);
+                const dpAmount = Number(order.dp_amount || 0);
+                const repaymentAmount = Number(order.repayment_amount || 0);
+
+                // Total Tagihan Bersih = (Frame + Addons + Ongkir) - Diskon
+                const calculatedTotal = (framePrice + addonsPrice + shippingFee) - discountAmount;
+                
+                // Total yang sudah dibayarkan pelanggan
+                const totalPaid = dpAmount + repaymentAmount;
+                
+                // Sisa pembayaran (Jika <= 0 maka LUNAS)
+                const calculatedRemaining = calculatedTotal - totalPaid;
+                const isPaidOff = calculatedRemaining <= 0;
+
+                return (
+                    <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 shadow-xs">
+                        <h3 className="font-bold text-gray-800 dark:text-white text-base mb-2">
+                            3. Ringkasan Pembayaran
+                        </h3>
+                        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                            <span>Harga Frame:</span>
+                            <span>Rp {framePrice.toLocaleString("id-ID")}</span>
+                        </div>
+                        {addonsPrice > 0 && (
+                            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                                <span>Harga Tambahan (Add-ons):</span>
+                                <span>Rp {addonsPrice.toLocaleString("id-ID")}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                            <span>Ongkir:</span>
+                            <span>Rp {shippingFee.toLocaleString("id-ID")}</span>
+                        </div>
+                        {discountAmount > 0 && (
+                            <div className="flex justify-between text-sm text-rose-500 font-medium">
+                                <span>Diskon (Potongan):</span>
+                                <span>- Rp {discountAmount.toLocaleString("id-ID")}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between text-base font-bold border-t dark:border-gray-800 pt-2 text-gray-800 dark:text-white">
+                            <span>Total Harga:</span>
+                            <span>Rp {calculatedTotal.toLocaleString("id-ID")}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                            <span>DP / Pelunasan Terbayar:</span>
+                            <span>Rp {totalPaid.toLocaleString("id-ID")}</span>
+                        </div>
+                        <div className="flex justify-between text-base font-bold border-t dark:border-gray-800 pt-2">
+                            <span className="dark:text-white">Sisa Tagihan:</span>
+                            <span className={isPaidOff ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>
+                                Rp {Math.max(0, calculatedRemaining).toLocaleString("id-ID")}{" "}
+                                ({isPaidOff ? "LUNAS" : "BELUM LUNAS"})
                             </span>
                         </div>
-                    )}
-                    <div className="flex justify-between text-base font-bold border-t dark:border-gray-800 pt-2 text-gray-800 dark:text-white">
-                        <span>Total Harga:</span>
-                        <span>
-                            Rp {Number(order.total_price || 0).toLocaleString("id-ID")}
-                        </span>
                     </div>
-                    <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                        <span>DP / Pelunasan Terbayar:</span>
-                        <span>
-                            Rp{" "}
-                            {(
-                                Number(order.dp_amount || 0) +
-                                Number(order.repayment_amount || 0)
-                            ).toLocaleString("id-ID")}
-                        </span>
-                    </div>
-                    <div className="flex justify-between text-base font-bold border-t dark:border-gray-800 pt-2">
-                        <span className="dark:text-white">Sisa Tagihan:</span>
-                        <span
-                            className={
-                                order.remaining_payment <= 0
-                                    ? "text-emerald-500"
-                                    : "text-rose-500"
-                            }
-                        >
-                            Rp {Number(order.remaining_payment || 0).toLocaleString("id-ID")}{" "}
-                            ({order.is_paid_off ? "LUNAS" : "BELUM LUNAS"})
-                        </span>
-                    </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* 4. ISIAN DATA DESAIN */}
             <div className="p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 shadow-xs">
