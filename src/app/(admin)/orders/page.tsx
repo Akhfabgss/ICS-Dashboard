@@ -780,35 +780,52 @@ function OrdersContent() {
 
                       {/* Total & Status Bayar */}
                       <td className="px-4 py-4 whitespace-nowrap">
-                        {isFinanceVisible ? (
-                          <>
-                            <p className="font-semibold text-gray-800 dark:text-white whitespace-nowrap">
-                              Rp{" "}
-                              {Number(order.total_price || 0).toLocaleString("id-ID")}
-                            </p>
+                        {(() => {
+                          const framePrice = Number(order.frame_price || 0);
+                          const addonsPrice = Number(order.addons_price || 0);
+                          const shippingFee = Number(order.shipping_fee || 0);
+                          const discountAmount = Number(order.discount_amount || 0);
+                          const dpAmount = Number(order.dp_amount || 0);
+                          const repaymentAmount = Number(order.repayment_amount || 0);
+
+                          const calculatedTotal = (framePrice + addonsPrice + shippingFee) - discountAmount;
+                          
+                          const finalTotal = calculatedTotal > 0 ? calculatedTotal : Number(order.total_price || 0);
+                          
+                          const totalPaid = dpAmount + repaymentAmount;
+                          
+                          const calculatedRemaining = finalTotal - totalPaid;
+                          const isPaidOff = calculatedRemaining <= 0 || order.is_paid_off;
+
+                          return isFinanceVisible ? (
+                            <>
+                              <p className="font-semibold text-gray-800 dark:text-white whitespace-nowrap">
+                                Rp {finalTotal.toLocaleString("id-ID")}
+                              </p>
+                              <span
+                                className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${
+                                  isPaidOff
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                    : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                }`}
+                              >
+                                {isPaidOff
+                                  ? "LUNAS"
+                                  : `Sisa: Rp ${Math.max(0, calculatedRemaining).toLocaleString("id-ID")}`}
+                              </span>
+                            </>
+                          ) : (
                             <span
-                              className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${order.is_paid_off
+                              className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full whitespace-nowrap ${
+                                isPaidOff
                                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                   : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
-                                }`}
-                            >
-                              {order.is_paid_off
-                                ? "LUNAS"
-                                : `Sisa: Rp ${Number(
-                                  order.remaining_payment || 0
-                                ).toLocaleString("id-ID")}`}
-                            </span>
-                          </>
-                        ) : (
-                          <span
-                            className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full whitespace-nowrap ${order.is_paid_off
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                               }`}
-                          >
-                            {order.is_paid_off ? "LUNAS" : "BELUM LUNAS"}
-                          </span>
-                        )}
+                            >
+                              {isPaidOff ? "LUNAS" : "BELUM LUNAS"}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Status Pesanan */}
