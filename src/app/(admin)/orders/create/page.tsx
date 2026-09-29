@@ -572,42 +572,48 @@ export default function CreateOrderPage() {
                             <Plus className="w-4 h-4" /> Tambah Poin Custom
                         </button>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         {designFields.map((field, index) => (
-                            <div key={index} className="flex gap-2 items-center">
-                                <input
-                                    type="text"
-                                    placeholder="Nama Poin"
-                                    value={field.key}
-                                    onChange={(e) => {
-                                        const u = [...designFields];
-                                        u[index].key = e.target.value;
-                                        setDesignFields(u);
-                                    }}
-                                    className="w-1/3 rounded-xl border border-gray-300 dark:border-gray-700 p-2 text-sm bg-transparent text-gray-900 dark:text-white font-semibold"
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Isi data..."
-                                    value={field.value}
-                                    onChange={(e) => {
-                                        const u = [...designFields];
-                                        u[index].value = e.target.value;
-                                        setDesignFields(u);
-                                    }}
-                                    className="flex-1 rounded-xl border border-gray-300 dark:border-gray-700 p-2 text-sm bg-transparent text-gray-900 dark:text-white"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        setDesignFields(
-                                            designFields.filter((_, i) => i !== index)
-                                        )
-                                    }
-                                    className="p-2 text-rose-500 hover:text-rose-700 cursor-pointer"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                            <div key={index} className="flex gap-2 items-start">
+                            {/* Nama Poin */}
+                            <input
+                                type="text"
+                                placeholder="Nama Poin"
+                                value={field.key}
+                                onChange={(e) => {
+                                const u = [...designFields];
+                                u[index].key = e.target.value;
+                                setDesignFields(u);
+                                }}
+                                className="w-1/3 h-[42px] rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm bg-transparent text-gray-900 dark:text-white font-semibold outline-none focus:border-brand-500"
+                            />
+
+                            {/* Isi Data (Textarea yang Sejajar Tinggi Awalnya) */}
+                            <textarea
+                                rows={1}
+                                placeholder="Isi data..."
+                                value={field.value}
+                                onChange={(e) => {
+                                const u = [...designFields];
+                                u[index].value = e.target.value;
+                                setDesignFields(u);
+                                }}
+                                className="flex-1 min-h-[42px] h-[42px] rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-2.5 text-sm bg-transparent text-gray-900 dark:text-white outline-none focus:border-brand-500 resize-y leading-snug"
+                            />
+
+                            {/* Tombol Hapus */}
+                            <button
+                                type="button"
+                                onClick={() =>
+                                setDesignFields(
+                                    designFields.filter((_, i) => i !== index)
+                                )
+                                }
+                                className="h-[42px] px-2.5 flex items-center justify-center text-rose-500 hover:text-rose-700 transition-colors cursor-pointer"
+                                title="Hapus Poin"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
                             </div>
                         ))}
                     </div>
