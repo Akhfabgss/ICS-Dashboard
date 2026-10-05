@@ -51,12 +51,10 @@ export default function CreateOrderPage() {
     const [category, setCategory] = useState("PENDAKIAN");
     const [productName, setProductName] = useState("");
     const [orderSource, setOrderSource] = useState("WhatsApp");
-    const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
-    const [assignedTo, setAssignedTo] = useState("");
 
-    // Custom Add-on State untuk Tambah Foto
-    const [isExtraPhotoChecked, setIsExtraPhotoChecked] = useState(false);
-    const [extraPhotoCount, setExtraPhotoCount] = useState<number>(1);
+    // Add-ons State dengan Kuantitas (Persis seperti Edit Order)
+    const [addonQuantities, setAddonQuantities] = useState<Record<string, number>>({});
+    const [assignedTo, setAssignedTo] = useState("");
 
     const [framePrice, setFramePrice] = useState<number>(0);
     const [shippingFee, setShippingFee] = useState<number>(0);
@@ -98,7 +96,13 @@ export default function CreateOrderPage() {
                 setFramePrice(Number(prodRes.data[0].price || 0));
             }
             if (addRes.data) setAddonList(addRes.data);
-            if (staffRes.data) setStaffList(staffRes.data as UserProfile[]);
+            if (staffRes.data) {
+                const onlyStaff = (staffRes.data as UserProfile[]).filter((s) => {
+                    const r = String(s.role || "").toLowerCase().trim();
+                    return r === "staff" || r === "designer";
+                });
+                setStaffList(onlyStaff);
+            }
         };
 
         fetchMasterData();
@@ -116,27 +120,28 @@ export default function CreateOrderPage() {
         if (found) setFramePrice(Number(found.price || 0));
     };
 
+    // Handler Toggle & Kuantitas Addons (Persis seperti Edit Order)
     const toggleAddon = (addonName: string) => {
-        if (addonName.toLowerCase().includes("foto")) {
-            setIsExtraPhotoChecked(!isExtraPhotoChecked);
-            return;
-        }
-
-        setSelectedAddons((prev) =>
-            prev.includes(addonName)
-                ? prev.filter((a) => a !== addonName)
-                : [...prev, addonName]
-        );
+        setAddonQuantities((prev) => {
+            const copy = { ...prev };
+            if (copy[addonName]) {
+                delete copy[addonName];
+            } else {
+                copy[addonName] = 1;
+            }
+            return copy;
+        });
     };
 
-    // Kalkulasi Total Harga Add-ons
-    const standardAddonsPrice = selectedAddons.reduce((acc, name) => {
-        const item = addonList.find((a) => a.name === name);
-        return acc + (item ? Number(item.price) : 0);
-    }, 0);
+    const setAddonQty = (addonName: string, qty: number) => {
+        setAddonQuantities((prev) => ({ ...prev, [addonName]: Math.max(1, qty) }));
+    };
 
-    const extraPhotoPrice = isExtraPhotoChecked ? extraPhotoCount * 5000 : 0;
-    const addonsPrice = standardAddonsPrice + extraPhotoPrice;
+    // Kalkulasi Total Harga Add-ons Berdasarkan Kuantitas
+    const addonsPrice = Object.entries(addonQuantities).reduce((acc, [name, qty]) => {
+        const item = addonList.find((a) => a.name === name);
+        return acc + (item ? Number(item.price) * qty : 0);
+    }, 0);
 
     // Kalkulasi Keuangan
     const subtotal = framePrice + addonsPrice + shippingFee;
@@ -170,10 +175,11 @@ export default function CreateOrderPage() {
         setLoading(true);
         const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
 
-        const finalAddons = [...selectedAddons];
-        if (isExtraPhotoChecked) {
-            finalAddons.push(`Tambah foto (${extraPhotoCount} Foto)`);
-        }
+        // Formatting Add-ons sesuai format Edit: Jika qty > 1 tambahkan "(Nx)"
+        const finalAddons = Object.entries(addonQuantities).map(([name, qty]) => {
+            if (qty > 1) return `${name} (${qty}x)`;
+            return name;
+        });
 
         const payload: Record<string, unknown> = {
             order_number: orderNumber,
@@ -246,7 +252,7 @@ export default function CreateOrderPage() {
                     <h3 className="font-bold text-gray-800 dark:text-white text-base">
                         1. Informasi Pemesan
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                         <div>
                             <label className="block font-medium mb-1 dark:text-gray-200">
                                 Nama Pemesan *
@@ -259,6 +265,7 @@ export default function CreateOrderPage() {
                                 className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500"
                             />
                         </div>
+
                         <div>
                             <label className="block font-medium mb-1 dark:text-gray-200">
                                 Tanggal Order *
@@ -274,6 +281,7 @@ export default function CreateOrderPage() {
                                 />
                             </div>
                         </div>
+
                         <div>
                             <label className="block font-medium mb-1 dark:text-gray-200">
                                 No. WhatsApp *
@@ -286,7 +294,26 @@ export default function CreateOrderPage() {
                                 className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500"
                             />
                         </div>
+
+                        <div>
+                            <label className="block font-medium mb-1 dark:text-gray-200">
+                                Dikerjakan Oleh
+                            </label>
+                            <select
+                                value={assignedTo}
+                                onChange={(e) => setAssignedTo(e.target.value)}
+                                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent dark:bg-gray-900 p-2.5 text-gray-900 dark:text-white outline-none focus:border-brand-500 cursor-pointer"
+                            >
+                                <option value="">— Belum Ditugaskan —</option>
+                                {staffList.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                        {s.full_name || s.email}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
                             <label className="block font-medium mb-1 dark:text-gray-200">
@@ -337,6 +364,7 @@ export default function CreateOrderPage() {
                                 <option value="RUNNING">RUNNING (R)</option>
                                 <option value="SEPEDA">SEPEDA (S)</option>
                                 <option value="TOURING">TOURING (T)</option>
+                                <option value="TNI">TNI (TN)</option>
                                 <option value="CUSTOM">CUSTOM (C)</option>
                             </select>
                         </div>
@@ -378,7 +406,7 @@ export default function CreateOrderPage() {
                         </div>
                     </div>
 
-                    {/* ADD-ONS SECTION */}
+                    {/* ADD-ONS SECTION (PERSIS SEPERTI EDIT ORDER) */}
                     <div>
                         <label className="block font-medium mb-2 text-sm dark:text-gray-200">
                             Pilih Tambahan / Add-ons
@@ -390,78 +418,52 @@ export default function CreateOrderPage() {
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {addonList.map((item) => {
-                                    const isPhotoAddon = item.name
-                                        .toLowerCase()
-                                        .includes("foto");
-
-                                    if (isPhotoAddon) {
-                                        return (
-                                            <div
-                                                key={item.id}
-                                                className={`p-3 rounded-xl border transition-colors ${isExtraPhotoChecked
-                                                    ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10"
-                                                    : "border-gray-200 dark:border-gray-800"
-                                                    }`}
-                                            >
-                                                <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium dark:text-gray-200">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isExtraPhotoChecked}
-                                                        onChange={() =>
-                                                            setIsExtraPhotoChecked(!isExtraPhotoChecked)
-                                                        }
-                                                        className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
-                                                    />
-                                                    <span>Tambah foto</span>
-                                                </label>
-
-                                                {isExtraPhotoChecked && (
-                                                    <div className="mt-2.5 pl-6 flex items-center gap-2">
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            value={extraPhotoCount}
-                                                            onChange={(e) =>
-                                                                setExtraPhotoCount(
-                                                                    Math.max(1, Number(e.target.value))
-                                                                )
-                                                            }
-                                                            className="w-20 rounded-lg border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-bold"
-                                                        />
-                                                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                            foto{" "}
-                                                            {isFinanceVisible &&
-                                                                ` (+Rp ${extraPhotoPrice.toLocaleString(
-                                                                    "id-ID"
-                                                                )})`}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    }
+                                    const isChecked = !!addonQuantities[item.name];
+                                    const qty = addonQuantities[item.name] || 1;
+                                    const itemTotal = item.price * qty;
 
                                     return (
-                                        <label
+                                        <div
                                             key={item.id}
-                                            className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-sm transition-colors ${selectedAddons.includes(item.name)
-                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium dark:text-white"
-                                                : "border-gray-200 dark:border-gray-800 dark:text-gray-300"
+                                            className={`p-3 rounded-xl border transition-colors ${isChecked
+                                                    ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10"
+                                                    : "border-gray-200 dark:border-gray-800"
                                                 }`}
                                         >
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedAddons.includes(item.name)}
-                                                onChange={() => toggleAddon(item.name)}
-                                                className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
-                                            />
-                                            <span>
-                                                {item.name}{" "}
-                                                {isFinanceVisible
-                                                    ? `(+Rp ${item.price.toLocaleString("id-ID")})`
-                                                    : ""}
-                                            </span>
-                                        </label>
+                                            <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium dark:text-gray-200">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => toggleAddon(item.name)}
+                                                    className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
+                                                />
+                                                <span>
+                                                    {item.name}{" "}
+                                                    {isFinanceVisible
+                                                        ? `(+Rp ${item.price.toLocaleString("id-ID")})`
+                                                        : ""}
+                                                </span>
+                                            </label>
+
+                                            {isChecked && (
+                                                <div className="mt-2.5 pl-6 flex items-center gap-2">
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        value={qty}
+                                                        onChange={(e) =>
+                                                            setAddonQty(item.name, Number(e.target.value))
+                                                        }
+                                                        className="w-20 rounded-lg border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-bold"
+                                                    />
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                        pcs{" "}
+                                                        {isFinanceVisible &&
+                                                            `(+Rp ${itemTotal.toLocaleString("id-ID")})`}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -575,45 +577,45 @@ export default function CreateOrderPage() {
                     <div className="space-y-3">
                         {designFields.map((field, index) => (
                             <div key={index} className="flex gap-2 items-start">
-                            {/* Nama Poin */}
-                            <input
-                                type="text"
-                                placeholder="Nama Poin"
-                                value={field.key}
-                                onChange={(e) => {
-                                const u = [...designFields];
-                                u[index].key = e.target.value;
-                                setDesignFields(u);
-                                }}
-                                className="w-1/3 h-[42px] rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm bg-transparent text-gray-900 dark:text-white font-semibold outline-none focus:border-brand-500"
-                            />
+                                {/* Nama Poin */}
+                                <input
+                                    type="text"
+                                    placeholder="Nama Poin"
+                                    value={field.key}
+                                    onChange={(e) => {
+                                        const u = [...designFields];
+                                        u[index].key = e.target.value;
+                                        setDesignFields(u);
+                                    }}
+                                    className="w-1/3 h-[42px] rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm bg-transparent text-gray-900 dark:text-white font-semibold outline-none focus:border-brand-500"
+                                />
 
-                            {/* Isi Data (Textarea yang Sejajar Tinggi Awalnya) */}
-                            <textarea
-                                rows={1}
-                                placeholder="Isi data..."
-                                value={field.value}
-                                onChange={(e) => {
-                                const u = [...designFields];
-                                u[index].value = e.target.value;
-                                setDesignFields(u);
-                                }}
-                                className="flex-1 min-h-[42px] h-[42px] rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-2.5 text-sm bg-transparent text-gray-900 dark:text-white outline-none focus:border-brand-500 resize-y leading-snug"
-                            />
+                                {/* Isi Data (Textarea yang Sejajar Tinggi Awalnya) */}
+                                <textarea
+                                    rows={1}
+                                    placeholder="Isi data..."
+                                    value={field.value}
+                                    onChange={(e) => {
+                                        const u = [...designFields];
+                                        u[index].value = e.target.value;
+                                        setDesignFields(u);
+                                    }}
+                                    className="flex-1 min-h-[42px] h-[42px] rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-2.5 text-sm bg-transparent text-gray-900 dark:text-white outline-none focus:border-brand-500 resize-y leading-snug"
+                                />
 
-                            {/* Tombol Hapus */}
-                            <button
-                                type="button"
-                                onClick={() =>
-                                setDesignFields(
-                                    designFields.filter((_, i) => i !== index)
-                                )
-                                }
-                                className="h-[42px] px-2.5 flex items-center justify-center text-rose-500 hover:text-rose-700 transition-colors cursor-pointer"
-                                title="Hapus Poin"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
+                                {/* Tombol Hapus */}
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setDesignFields(
+                                            designFields.filter((_, i) => i !== index)
+                                        )
+                                    }
+                                    className="h-[42px] px-2.5 flex items-center justify-center text-rose-500 hover:text-rose-700 transition-colors cursor-pointer"
+                                    title="Hapus Poin"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
                             </div>
                         ))}
                     </div>

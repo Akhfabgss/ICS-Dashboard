@@ -64,12 +64,8 @@ export default function EditOrderPage() {
     const [category, setCategory] = useState("PENDAKIAN");
     const [productName, setProductName] = useState("");
     const [orderSource, setOrderSource] = useState("WhatsApp");
-    const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+    const [addonQuantities, setAddonQuantities] = useState<Record<string, number>>({});
     const [assignedTo, setAssignedTo] = useState("");
-
-    // Custom Add-on State untuk Tambah Foto
-    const [isExtraPhotoChecked, setIsExtraPhotoChecked] = useState(false);
-    const [extraPhotoCount, setExtraPhotoCount] = useState<number>(1);
 
     const [framePrice, setFramePrice] = useState<number>(0);
     const [shippingFee, setShippingFee] = useState<number>(0);
@@ -145,27 +141,25 @@ export default function EditOrderPage() {
                 setRepaymentAmount(Number(o.repayment_amount || 0));
                 setShippingMethod(o.shipping_method || "JNE");
 
-                // Parsing Add-ons & Deteksi Tambah Foto
+                // Parsing Add-ons & Restore jumlah
                 const rawAddons: string[] = o.add_ons || [];
-                const normalAddons: string[] = [];
-                let photoFound = false;
+                const quantities: Record<string, number> = {};
 
                 rawAddons.forEach((addonStr) => {
-                    if (addonStr.toLowerCase().includes("tambah foto")) {
-                        photoFound = true;
-                        const match = addonStr.match(/\((\d+)\s*Foto\)/i);
-                        if (match && match[1]) {
-                            setExtraPhotoCount(parseInt(match[1], 10));
-                        } else {
-                            setExtraPhotoCount(1);
-                        }
+                    // Try to parse quantity format: "Name (Nx)" or "Tambah foto (N Foto)"
+                    const matchQty = addonStr.match(/^(.+?)\s*\((\d+)x\)$/i);
+                    const matchFoto = addonStr.match(/^(.+?)\s*\((\d+)\s*Foto\)$/i);
+
+                    if (matchQty && matchQty[1] && matchQty[2]) {
+                        quantities[matchQty[1].trim()] = parseInt(matchQty[2], 10);
+                    } else if (matchFoto && matchFoto[1] && matchFoto[2]) {
+                        quantities[matchFoto[1].trim()] = parseInt(matchFoto[2], 10);
                     } else {
-                        normalAddons.push(addonStr);
+                        quantities[addonStr] = 1;
                     }
                 });
 
-                setIsExtraPhotoChecked(photoFound);
-                setSelectedAddons(normalAddons);
+                setAddonQuantities(quantities);
 
                 if (o.design_data) {
                     try {
@@ -200,25 +194,25 @@ export default function EditOrderPage() {
     };
 
     const toggleAddon = (addonName: string) => {
-        if (addonName.toLowerCase().includes("foto")) {
-            setIsExtraPhotoChecked(!isExtraPhotoChecked);
-            return;
-        }
-
-        setSelectedAddons((prev) =>
-            prev.includes(addonName)
-                ? prev.filter((a) => a !== addonName)
-                : [...prev, addonName]
-        );
+        setAddonQuantities((prev) => {
+            const copy = { ...prev };
+            if (copy[addonName]) {
+                delete copy[addonName];
+            } else {
+                copy[addonName] = 1;
+            }
+            return copy;
+        });
     };
 
-    const standardAddonsPrice = selectedAddons.reduce((acc, name) => {
-        const item = addonList.find((a) => a.name === name);
-        return acc + (item ? Number(item.price) : 0);
-    }, 0);
+    const setAddonQty = (addonName: string, qty: number) => {
+        setAddonQuantities((prev) => ({ ...prev, [addonName]: Math.max(1, qty) }));
+    };
 
-    const extraPhotoPrice = isExtraPhotoChecked ? extraPhotoCount * 5000 : 0;
-    const addonsPrice = standardAddonsPrice + extraPhotoPrice;
+    const addonsPrice = Object.entries(addonQuantities).reduce((acc, [name, qty]) => {
+        const item = addonList.find((a) => a.name === name);
+        return acc + (item ? Number(item.price) * qty : 0);
+    }, 0);
 
     const subtotal = framePrice + addonsPrice + shippingFee;
     const totalPrice = Math.max(0, subtotal - discountAmount);
@@ -241,10 +235,10 @@ export default function EditOrderPage() {
 
         setSubmitting(true);
 
-        const finalAddons = [...selectedAddons];
-        if (isExtraPhotoChecked) {
-            finalAddons.push(`Tambah foto (${extraPhotoCount} Foto)`);
-        }
+        const finalAddons = Object.entries(addonQuantities).map(([name, qty]) => {
+            if (qty > 1) return `${name} (${qty}x)`;
+            return name;
+        });
 
         const { data: oldOrder } = await supabase
             .from("orders")
@@ -549,6 +543,7 @@ export default function EditOrderPage() {
                                 <option value="RUNNING">RUNNING (R)</option>
                                 <option value="SEPEDA">SEPEDA (S)</option>
                                 <option value="TOURING">TOURING (T)</option>
+                                <option value="TNI">TNI</option>
                                 <option value="CUSTOM">CUSTOM (C)</option>
                             </select>
                         </div>
@@ -596,78 +591,53 @@ export default function EditOrderPage() {
                         </label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {addonList.map((item) => {
-                                const isPhotoAddon = item.name
-                                    .toLowerCase()
-                                    .includes("foto");
-
-                                if (isPhotoAddon) {
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            className={`p-3 rounded-xl border transition-colors ${isExtraPhotoChecked
-                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10"
-                                                : "border-gray-200 dark:border-gray-800"
-                                                }`}
-                                        >
-                                            <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium dark:text-gray-200">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isExtraPhotoChecked}
-                                                    onChange={() =>
-                                                        setIsExtraPhotoChecked(!isExtraPhotoChecked)
-                                                    }
-                                                    className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
-                                                />
-                                                <span>Tambah foto</span>
-                                            </label>
-
-                                            {isExtraPhotoChecked && (
-                                                <div className="mt-2.5 pl-6 flex items-center gap-2">
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        value={extraPhotoCount}
-                                                        onChange={(e) =>
-                                                            setExtraPhotoCount(
-                                                                Math.max(1, Number(e.target.value))
-                                                            )
-                                                        }
-                                                        className="w-20 rounded-lg border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-bold"
-                                                    />
-                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                        foto{" "}
-                                                        {isFinanceVisible &&
-                                                            ` (+Rp ${extraPhotoPrice.toLocaleString(
-                                                                "id-ID"
-                                                            )})`}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                }
+                                const isChecked = !!addonQuantities[item.name];
+                                const qty = addonQuantities[item.name] || 1;
+                                const itemTotal = item.price * qty;
 
                                 return (
-                                    <label
+                                    <div
                                         key={item.id}
-                                        className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer text-sm transition-colors ${selectedAddons.includes(item.name)
-                                            ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10 font-medium dark:text-white"
-                                            : "border-gray-200 dark:border-gray-800 dark:text-gray-300"
-                                            }`}
+                                        className={`p-3 rounded-xl border transition-colors ${
+                                            isChecked
+                                                ? "border-brand-500 bg-brand-50/20 dark:bg-brand-500/10"
+                                                : "border-gray-200 dark:border-gray-800"
+                                        }`}
                                     >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedAddons.includes(item.name)}
-                                            onChange={() => toggleAddon(item.name)}
-                                            className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
-                                        />
-                                        <span>
-                                            {item.name}{" "}
-                                            {isFinanceVisible
-                                                ? `(+Rp ${item.price.toLocaleString("id-ID")})`
-                                                : ""}
-                                        </span>
-                                    </label>
+                                        <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium dark:text-gray-200">
+                                            <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => toggleAddon(item.name)}
+                                                className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
+                                            />
+                                            <span>
+                                                {item.name}{" "}
+                                                {isFinanceVisible
+                                                    ? `(+Rp ${item.price.toLocaleString("id-ID")})`
+                                                    : ""}
+                                            </span>
+                                        </label>
+
+                                        {isChecked && (
+                                            <div className="mt-2.5 pl-6 flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    value={qty}
+                                                    onChange={(e) =>
+                                                        setAddonQty(item.name, Number(e.target.value))
+                                                    }
+                                                    className="w-20 rounded-lg border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-bold"
+                                                />
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                    pcs{" "}
+                                                    {isFinanceVisible &&
+                                                        `(+Rp ${itemTotal.toLocaleString("id-ID")})`}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 );
                             })}
                         </div>
