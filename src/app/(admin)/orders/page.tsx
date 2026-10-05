@@ -13,6 +13,7 @@ import { CalenderIcon } from "@/icons";
 import { deductStockForOrder } from "@/lib/stockDeduction";
 
 const STORAGE_KEY = "orders_page_filters";
+const ITEMS_PER_PAGE = 20;
 
 interface SavedFilters {
   searchQuery?: string;
@@ -90,6 +91,7 @@ function OrdersContent() {
 
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const datePickerRef = useRef<HTMLInputElement | null>(null);
   const fpInstance = useRef<flatpickr.Instance | null>(null);
@@ -342,6 +344,17 @@ function OrdersContent() {
     selectedShippingMethod,
     selectedAssignee,
   ]);
+
+  // Reset halaman saat filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, startDateParam, endDateParam, selectedProduct, selectedPaidStatus, selectedShippingMethod, selectedAssignee]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ITEMS_PER_PAGE));
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredOrders, currentPage]);
 
   const orderSummary = useMemo(() => {
     const totalOrders = filteredOrders.length;
@@ -723,7 +736,7 @@ function OrdersContent() {
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((order) => {
+                paginatedOrders.map((order) => {
                   const selectedAssigneeValue =
                     staffList.find(
                       (s) =>
@@ -921,8 +934,8 @@ function OrdersContent() {
         </div>
       </div>
 
-      {/* FOOTER */}
-      <div className="flex items-center justify-between border-gray-200 px-4 py-3 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+      {/* FOOTER PAGINATION */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-gray-200 px-4 py-3 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
           {loading ? (
             "Memuat data..."
@@ -930,10 +943,64 @@ function OrdersContent() {
             "Menampilkan 0 data"
           ) : (
             <>
-              Menampilkan <span className="font-semibold text-gray-800 dark:text-white">{filteredOrders.length}</span> Total orderan
+              Menampilkan{" "}
+              <span className="font-semibold text-gray-800 dark:text-white">
+                {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredOrders.length)}
+              </span>{" "}
+              dari <span className="font-semibold text-gray-800 dark:text-white">{filteredOrders.length}</span> pesanan
             </>
           )}
         </p>
+
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              ← Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((page) => {
+                if (totalPages <= 7) return true;
+                if (page === 1 || page === totalPages) return true;
+                if (Math.abs(page - currentPage) <= 1) return true;
+                return false;
+              })
+              .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                if (idx > 0 && typeof arr[idx - 1] === 'number' && (page as number) - (arr[idx - 1] as number) > 1) {
+                  acc.push('...');
+                }
+                acc.push(page);
+                return acc;
+              }, [])
+              .map((page, idx) =>
+                typeof page === 'string' ? (
+                  <span key={`dot-${idx}`} className="px-1.5 text-xs text-gray-400">…</span>
+                ) : (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                      currentPage === page
+                        ? "border-brand-500 bg-brand-500 text-white"
+                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

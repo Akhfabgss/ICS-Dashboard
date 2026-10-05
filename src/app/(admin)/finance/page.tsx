@@ -22,6 +22,8 @@ interface CashFlowItem {
   sourceType?: "Order" | "Reseller" | "Manual";
 }
 
+const ITEMS_PER_PAGE = 20;
+
 export default function FinancePage() {
   return (
     <RoleGuard allowedRoles={["Owner", "Bendahara"]}>
@@ -35,6 +37,7 @@ function FinanceContent() {
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Ref Flatpickr
   const datePickerRef = useRef<HTMLInputElement | null>(null);
@@ -218,6 +221,17 @@ function FinanceContent() {
       return matchesStart && matchesEnd;
     });
   }, [cashFlows, filterType, dateRange]);
+
+  // Reset halaman saat filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterType, dateRange]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredFlows.length / ITEMS_PER_PAGE));
+  const paginatedFlows = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredFlows.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredFlows, currentPage]);
 
   // Total Statistik Mengikuti Hasil Filter Tanggal
   const totalIncome = useMemo(() => {
@@ -442,7 +456,7 @@ function FinanceContent() {
                   </td>
                 </tr>
               ) : (
-                filteredFlows.map((flow) => (
+                paginatedFlows.map((flow) => (
                   <tr key={flow.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
                     <td className="p-3">
                       <p className="font-semibold text-gray-800 dark:text-white">{flow.id}</p>
@@ -495,6 +509,75 @@ function FinanceContent() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* FOOTER PAGINATION */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 rounded-b-xl">
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+            {loading ? (
+              "Memuat data..."
+            ) : filteredFlows.length === 0 ? (
+              "Menampilkan 0 data"
+            ) : (
+              <>
+                Menampilkan{" "}
+                <span className="font-semibold text-gray-800 dark:text-white">
+                  {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredFlows.length)}
+                </span>{" "}
+                dari <span className="font-semibold text-gray-800 dark:text-white">{filteredFlows.length}</span> transaksi
+              </>
+            )}
+          </p>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                ← Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((page) => {
+                  if (totalPages <= 7) return true;
+                  if (page === 1 || page === totalPages) return true;
+                  if (Math.abs(page - currentPage) <= 1) return true;
+                  return false;
+                })
+                .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                  if (idx > 0 && typeof arr[idx - 1] === 'number' && (page as number) - (arr[idx - 1] as number) > 1) {
+                    acc.push('...');
+                  }
+                  acc.push(page);
+                  return acc;
+                }, [])
+                .map((page, idx) =>
+                  typeof page === 'string' ? (
+                    <span key={`dot-${idx}`} className="px-1.5 text-xs text-gray-400">…</span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                        currentPage === page
+                          ? "border-brand-500 bg-brand-500 text-white"
+                          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

@@ -12,6 +12,7 @@ import { CalenderIcon } from "@/icons";
 
 // Key khusus localStorage untuk halaman Invoices
 const INVOICES_STORAGE_KEY = "invoices_page_filters";
+const ITEMS_PER_PAGE = 20;
 
 interface SavedInvoiceFilters {
   searchQuery?: string;
@@ -63,6 +64,7 @@ function InvoicesContent() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [ordersToPrint, setOrdersToPrint] = useState<Order[]>([]);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Efek untuk menyimpan semua state filter ke LocalStorage dan URL Params
   useEffect(() => {
@@ -168,6 +170,17 @@ function InvoicesContent() {
     });
   }, [orders, searchQuery, startDateParam, endDateParam]);
 
+  // Reset halaman saat filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, startDateParam, endDateParam]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ITEMS_PER_PAGE));
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredOrders, currentPage]);
+
   // Handler Reset Filters
   const handleResetFilters = () => {
     setSearchQuery("");
@@ -192,10 +205,12 @@ function InvoicesContent() {
 
   // Handler Select All / Deselect All
   const toggleSelectAll = () => {
-    if (selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0) {
-      setSelectedOrderIds([]);
+    const pageIds = paginatedOrders.map((o) => o.id);
+    const allPageSelected = pageIds.every((id) => selectedOrderIds.includes(id));
+    if (allPageSelected) {
+      setSelectedOrderIds((prev) => prev.filter((id) => !pageIds.includes(id)));
     } else {
-      setSelectedOrderIds(filteredOrders.map((o) => o.id));
+      setSelectedOrderIds((prev) => [...new Set([...prev, ...pageIds])]);
     }
   };
 
@@ -285,10 +300,9 @@ function InvoicesContent() {
                   <button
                     onClick={toggleSelectAll}
                     className="text-gray-500 hover:text-brand-500 focus:outline-none"
-                    title="Pilih Semua"
+                    title="Pilih Semua di Halaman Ini"
                   >
-                    {selectedOrderIds.length > 0 &&
-                      selectedOrderIds.length === filteredOrders.length ? (
+                    {paginatedOrders.length > 0 && paginatedOrders.every((o) => selectedOrderIds.includes(o.id)) ? (
                       <CheckSquare className="w-4 h-4 text-brand-500" />
                     ) : (
                       <Square className="w-4 h-4" />
@@ -319,7 +333,7 @@ function InvoicesContent() {
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((order) => {
+                paginatedOrders.map((order) => {
                   const isChecked = selectedOrderIds.includes(order.id);
 
                   return (
@@ -383,6 +397,75 @@ function InvoicesContent() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* FOOTER PAGINATION */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+            {loading ? (
+              "Memuat data..."
+            ) : filteredOrders.length === 0 ? (
+              "Menampilkan 0 data"
+            ) : (
+              <>
+                Menampilkan{" "}
+                <span className="font-semibold text-gray-800 dark:text-white">
+                  {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredOrders.length)}
+                </span>{" "}
+                dari <span className="font-semibold text-gray-800 dark:text-white">{filteredOrders.length}</span> invoice
+              </>
+            )}
+          </p>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                ← Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((page) => {
+                  if (totalPages <= 7) return true;
+                  if (page === 1 || page === totalPages) return true;
+                  if (Math.abs(page - currentPage) <= 1) return true;
+                  return false;
+                })
+                .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                  if (idx > 0 && typeof arr[idx - 1] === 'number' && (page as number) - (arr[idx - 1] as number) > 1) {
+                    acc.push('...');
+                  }
+                  acc.push(page);
+                  return acc;
+                }, [])
+                .map((page, idx) =>
+                  typeof page === 'string' ? (
+                    <span key={`dot-${idx}`} className="px-1.5 text-xs text-gray-400">…</span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                        currentPage === page
+                          ? "border-brand-500 bg-brand-500 text-white"
+                          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
