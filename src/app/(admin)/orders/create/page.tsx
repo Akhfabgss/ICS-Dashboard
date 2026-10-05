@@ -364,7 +364,7 @@ export default function CreateOrderPage() {
                                 <option value="RUNNING">RUNNING (R)</option>
                                 <option value="SEPEDA">SEPEDA (S)</option>
                                 <option value="TOURING">TOURING (T)</option>
-                                <option value="TNI">TNI (TN)</option>
+                                <option value="TNI">TNI</option>
                                 <option value="CUSTOM">CUSTOM (C)</option>
                             </select>
                         </div>
