@@ -1,5 +1,13 @@
 export type OrderStatus = 'Dalam Daftar' | 'Pending' | 'Proses Design' | 'Pengerjaan' | 'Pengiriman' | 'Selesai' | 'Trouble';
 
+export interface StatusMapping {
+  id: string;
+  user_id: string;
+  target_status: OrderStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Order {
   id: string;
   order_number: string;

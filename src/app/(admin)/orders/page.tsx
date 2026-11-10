@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
-import { Order, OrderStatus } from "@/types/order";
+import { Order, OrderStatus, StatusMapping } from "@/types/order";
 import { UserProfile } from "@/types/users";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
@@ -11,6 +11,7 @@ import flatpickr from "flatpickr";
 import "flatpickr/dist/flatpickr.css";
 import { CalenderIcon } from "@/icons";
 import { deductStockForOrder } from "@/lib/stockDeduction";
+import StatusMappingModal from "@/components/orders/StatusMappingModal";
 
 const STORAGE_KEY = "orders_page_filters";
 const ITEMS_PER_PAGE = 20;
@@ -79,6 +80,9 @@ function OrdersContent() {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [staffList, setStaffList] = useState<UserProfile[]>([]);
+  const [statusMappings, setStatusMappings] = useState<StatusMapping[]>([]);
+  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
 
   // Filter States (Inisialisasi aman tanpa langsung menembak localStorage saat SSR)
   const [searchQuery, setSearchQuery] = useState("");
@@ -234,6 +238,20 @@ function OrdersContent() {
     setLoading(false);
   };
 
+  const fetchStatusMappings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("status_mappings")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (!error && data) {
+        setStatusMappings(data as StatusMapping[]);
+      }
+    } catch (e) {
+      console.error("Gagal memuat status mappings:", e);
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       const {
@@ -260,11 +278,12 @@ function OrdersContent() {
       if (!staffError && staff) {
         const onlyStaff = (staff as UserProfile[]).filter((s) => {
           const r = String(s.role || "").toLowerCase().trim();
-          return r === "staff" || r === "designer";
+          return r === "staff" || r === "designer" || r === "produksi" || (r !== "owner" && r !== "bendahara");
         });
         setStaffList(onlyStaff);
       }
 
+      await fetchStatusMappings();
       await fetchOrders();
     };
 
@@ -272,10 +291,32 @@ function OrdersContent() {
   }, []);
 
   const normalizedRole = (userRole || "").toLowerCase().trim();
+  const isOwner = normalizedRole === "owner";
   const isFinanceVisible =
     normalizedRole !== "staff" &&
     normalizedRole !== "designer" &&
     normalizedRole !== "";
+
+  // Helper pencarian status otomatis berdasarkan pemetaan dinamis staf spesifik
+  const getMappedStatusForAssignee = (assigneeIdOrName: string): OrderStatus | null => {
+    if (!assigneeIdOrName || assigneeIdOrName === "UNASSIGNED") return null;
+
+    const staff = staffList.find(
+      (s) => s.id === assigneeIdOrName || s.full_name === assigneeIdOrName
+    );
+
+    if (!staff) return null;
+
+    // Aturan spesifik berdasarkan ID staf
+    const userRule = statusMappings.find(
+      (m) => m.user_id && m.user_id === staff.id
+    );
+    if (userRule?.target_status) {
+      return userRule.target_status;
+    }
+
+    return null;
+  };
 
   const uniqueProducts = useMemo(() => {
     const products = orders.map((o) => o.product_name).filter(Boolean);
@@ -345,9 +386,10 @@ function OrdersContent() {
     selectedAssignee,
   ]);
 
-  // Reset halaman saat filter berubah
+  // Reset halaman & seleksi saat filter berubah
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedOrderIds([]);
   }, [searchQuery, startDateParam, endDateParam, selectedProduct, selectedPaidStatus, selectedShippingMethod, selectedAssignee]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ITEMS_PER_PAGE));
@@ -355,6 +397,34 @@ function OrdersContent() {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredOrders, currentPage]);
+
+  // Helper seleksi bulk
+  const isAllCurrentPageSelected =
+    paginatedOrders.length > 0 &&
+    paginatedOrders.every((o) => selectedOrderIds.includes(o.id));
+
+  const isSomeCurrentPageSelected =
+    paginatedOrders.some((o) => selectedOrderIds.includes(o.id)) &&
+    !isAllCurrentPageSelected;
+
+  const handleSelectAllCurrentPage = () => {
+    const currentPageIds = paginatedOrders.map((o) => o.id);
+    if (isAllCurrentPageSelected) {
+      setSelectedOrderIds((prev) => prev.filter((id) => !currentPageIds.includes(id)));
+    } else {
+      setSelectedOrderIds((prev) => Array.from(new Set([...prev, ...currentPageIds])));
+    }
+  };
+
+  const handleToggleSelectOrder = (id: string) => {
+    setSelectedOrderIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedOrderIds([]);
+  };
 
   const orderSummary = useMemo(() => {
     const totalOrders = filteredOrders.length;
@@ -393,30 +463,189 @@ function OrdersContent() {
   };
 
   const updateAssignee = async (id: string, assignedToValue: string) => {
-    const selectedStaff = staffList.find(
-      (s) => s.id === assignedToValue || s.full_name === assignedToValue
-    );
+    const isUnassigned = !assignedToValue || assignedToValue === "UNASSIGNED";
+    const selectedStaff = isUnassigned
+      ? null
+      : staffList.find(
+        (s) => s.id === assignedToValue || s.full_name === assignedToValue
+      );
 
-    const staffName = selectedStaff?.full_name ?? (assignedToValue || "Tidak ada");
-    const valueToSave = assignedToValue || null;
+    const staffName = isUnassigned ? "Belum Ditugaskan" : (selectedStaff?.full_name ?? assignedToValue);
+    const valueToSave = isUnassigned ? null : assignedToValue;
+
+    // Cek pemetaan otomatis staf -> status
+    const autoStatus = isUnassigned ? null : getMappedStatusForAssignee(assignedToValue);
+
+    const updatePayload: { assigned_to: string | null; status?: OrderStatus } = {
+      assigned_to: valueToSave,
+    };
+
+    if (autoStatus) {
+      updatePayload.status = autoStatus;
+    }
 
     const { error } = await supabase
       .from("orders")
-      .update({ assigned_to: valueToSave })
+      .update(updatePayload)
       .eq("id", id);
 
     if (error) {
       Swal.fire("Error!", "Gagal mengubah penugasan: " + error.message, "error");
     } else {
+      if (autoStatus === "Selesai") {
+        const orderObj = orders.find((o) => o.id === id);
+        if (orderObj) {
+          await deductStockForOrder(orderObj.product_name, orderObj.add_ons ?? [], 1);
+        }
+      }
+
       Swal.fire({
         toast: true,
         position: "top-end",
         icon: "success",
-        title: `Dikerjakan oleh: ${staffName}`,
+        title: autoStatus
+          ? `Dikerjakan oleh: ${staffName} `
+          : `Dikerjakan oleh: ${staffName}`,
         showConfirmButton: false,
         timer: 2000,
       });
       fetchOrders();
+    }
+  };
+
+  // Handler Bulk Action: Ubah Status Massal
+  const handleBulkUpdateStatus = async (newStatus: OrderStatus) => {
+    if (selectedOrderIds.length === 0) return;
+
+    const result = await Swal.fire({
+      title: "Ubah Status Massal?",
+      text: `Ubah status ${selectedOrderIds.length} pesanan yang dipilih menjadi "${newStatus}"?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#4f46e5",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Ya, Ubah Semua",
+      cancelButtonText: "Batal",
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+      title: "Memproses Perubahan...",
+      text: "Mohon tunggu sebentar",
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: newStatus })
+        .in("id", selectedOrderIds);
+
+      if (error) throw error;
+
+      if (newStatus === "Selesai") {
+        const selectedOrders = orders.filter((o) => selectedOrderIds.includes(o.id));
+        for (const order of selectedOrders) {
+          await deductStockForOrder(order.product_name, order.add_ons ?? [], 1);
+        }
+      }
+
+      Swal.fire({
+        icon: "success",
+        title: "Status Berhasil Diperbarui!",
+        text: `${selectedOrderIds.length} pesanan telah diubah statusnya menjadi "${newStatus}".`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
+      setSelectedOrderIds([]);
+      fetchOrders();
+    } catch (err: any) {
+      Swal.fire("Error!", "Gagal memperbarui status: " + err.message, "error");
+    }
+  };
+
+  // Handler Bulk Action: Tugaskan Staf Massal
+  const handleBulkUpdateAssignee = async (assignedToValue: string) => {
+    if (selectedOrderIds.length === 0) return;
+
+    const isUnassigned = !assignedToValue || assignedToValue === "UNASSIGNED";
+    const selectedStaff = isUnassigned
+      ? null
+      : staffList.find(
+        (s) => s.id === assignedToValue || s.full_name === assignedToValue
+      );
+
+    const staffName = isUnassigned ? "Belum Ditugaskan" : (selectedStaff?.full_name || assignedToValue);
+    const valueToSave = isUnassigned ? null : assignedToValue;
+    const autoStatus = isUnassigned ? null : getMappedStatusForAssignee(assignedToValue);
+
+    let confirmText = `Tugaskan ${selectedOrderIds.length} pesanan kepada ${staffName}?`;
+    if (autoStatus) {
+      confirmText += ` Status pesanan juga akan otomatis diubah`;
+    }
+
+    const result = await Swal.fire({
+      title: "Tugaskan Staf Massal?",
+      text: confirmText,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#4f46e5",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Ya, Tugaskan",
+      cancelButtonText: "Batal",
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({
+      title: "Memproses Penugasan...",
+      text: "Mohon tunggu sebentar",
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    try {
+      const updatePayload: { assigned_to: string | null; status?: OrderStatus } = {
+        assigned_to: valueToSave,
+      };
+
+      if (autoStatus) {
+        updatePayload.status = autoStatus;
+      }
+
+      const { error } = await supabase
+        .from("orders")
+        .update(updatePayload)
+        .in("id", selectedOrderIds);
+
+      if (error) throw error;
+
+      if (autoStatus === "Selesai") {
+        const selectedOrders = orders.filter((o) => selectedOrderIds.includes(o.id));
+        for (const order of selectedOrders) {
+          await deductStockForOrder(order.product_name, order.add_ons ?? [], 1);
+        }
+      }
+
+      Swal.fire({
+        icon: "success",
+        title: "Penugasan Berhasil!",
+        text: `${selectedOrderIds.length} pesanan berhasil ditugaskan ke ${staffName}.`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
+      setSelectedOrderIds([]);
+      fetchOrders();
+    } catch (err: any) {
+      Swal.fire("Error!", "Gagal menugaskan staf: " + err.message, "error");
     }
   };
 
@@ -553,12 +782,23 @@ function OrdersContent() {
             Kelola pesanan, status alur pengerjaan, dan rincian datanya.
           </p>
         </div>
-        <Link
-          href="/orders/create"
-          className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors inline-block text-center"
-        >
-          + Tambah Pesanan Baru
-        </Link>
+        <div className="flex items-center gap-2.5">
+          {isOwner && (
+            <button
+              onClick={() => setIsMappingModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 text-sm shadow-xs cursor-pointer"
+              title="Atur Pemetaan Relasi Staf & Status Otomatis"
+            >
+              Relasi Staf &amp; Status
+            </button>
+          )}
+          <Link
+            href="/orders/create"
+            className="px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium hover:bg-brand-600 transition-colors inline-block text-center"
+          >
+            + Tambah Pesanan Baru
+          </Link>
+        </div>
       </div>
 
       {/* STATISTIK CARDS */}
@@ -690,6 +930,18 @@ function OrdersContent() {
           <table className="w-max min-w-full text-left text-sm border-collapse">
             <thead className="border-b bg-gray-50 border-gray-200 dark:border-gray-800 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400">
               <tr>
+                <th className="px-3 py-3.5 text-center whitespace-nowrap w-10">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-700 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                    checked={isAllCurrentPageSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = isSomeCurrentPageSelected;
+                    }}
+                    onChange={handleSelectAllCurrentPage}
+                    title="Pilih Semua di Halaman Ini"
+                  />
+                </th>
                 <th className="px-4 py-3.5 font-medium whitespace-nowrap min-w-[140px]">
                   No. Order / Tgl
                 </th>
@@ -720,14 +972,14 @@ function OrdersContent() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-6 whitespace-nowrap">
+                  <td colSpan={9} className="text-center py-6 whitespace-nowrap">
                     Memuat data...
                   </td>
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center py-6 text-gray-500 whitespace-nowrap"
                   >
                     {isAnyFilterActive
@@ -751,8 +1003,22 @@ function OrdersContent() {
                   return (
                     <tr
                       key={order.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                      className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${selectedOrderIds.includes(order.id)
+                        ? "bg-brand-50/40 dark:bg-brand-900/10"
+                        : ""
+                        }`}
                     >
+                      {/* Checkbox Baris */}
+                      <td className="px-3 py-4 text-center whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 dark:border-gray-700 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                          checked={selectedOrderIds.includes(order.id)}
+                          onChange={() => handleToggleSelectOrder(order.id)}
+                          title={`Pilih pesanan ${order.order_number}`}
+                        />
+                      </td>
+
                       {/* No Order / Tanggal */}
                       <td className="px-4 py-4 whitespace-nowrap">
                         <p className="font-semibold text-gray-800 dark:text-white whitespace-nowrap">
@@ -802,11 +1068,11 @@ function OrdersContent() {
                           const repaymentAmount = Number(order.repayment_amount || 0);
 
                           const calculatedTotal = (framePrice + addonsPrice + shippingFee) - discountAmount;
-                          
+
                           const finalTotal = calculatedTotal > 0 ? calculatedTotal : Number(order.total_price || 0);
-                          
+
                           const totalPaid = dpAmount + repaymentAmount;
-                          
+
                           const calculatedRemaining = finalTotal - totalPaid;
                           const isPaidOff = calculatedRemaining <= 0 || order.is_paid_off;
 
@@ -816,11 +1082,10 @@ function OrdersContent() {
                                 Rp {finalTotal.toLocaleString("id-ID")}
                               </p>
                               <span
-                                className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${
-                                  isPaidOff
-                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                    : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
-                                }`}
+                                className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap ${isPaidOff
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                  : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                  }`}
                               >
                                 {isPaidOff
                                   ? "LUNAS"
@@ -829,11 +1094,10 @@ function OrdersContent() {
                             </>
                           ) : (
                             <span
-                              className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full whitespace-nowrap ${
-                                isPaidOff
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                  : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
-                              }`}
+                              className={`inline-block px-2.5 py-1 text-xs font-bold rounded-full whitespace-nowrap ${isPaidOff
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                                }`}
                             >
                               {isPaidOff ? "LUNAS" : "BELUM LUNAS"}
                             </span>
@@ -982,11 +1246,10 @@ function OrdersContent() {
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
-                      currentPage === page
-                        ? "border-brand-500 bg-brand-500 text-white"
-                        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                    }`}
+                    className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${currentPage === page
+                      ? "border-brand-500 bg-brand-500 text-white"
+                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      }`}
                   >
                     {page}
                   </button>
@@ -1002,6 +1265,97 @@ function OrdersContent() {
           </div>
         )}
       </div>
+
+      {/* FLOATING ACTION BAR FOR BULK ACTIONS */}
+      {selectedOrderIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-wrap items-center gap-3 bg-gray-900/95 dark:bg-gray-800/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl border border-gray-700 max-w-[95vw] animate-in fade-in slide-in-from-bottom-4">
+          {/* Indikator Pesanan Terpilih */}
+          <div className="flex items-center gap-2 pr-3 border-r border-gray-700">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
+              {selectedOrderIds.length}
+            </span>
+            <span className="text-xs font-semibold whitespace-nowrap">
+              {selectedOrderIds.length} pesanan dipilih
+            </span>
+          </div>
+
+          {/* Ubah Status Massal */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400 whitespace-nowrap hidden sm:inline">
+              Status:
+            </span>
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleBulkUpdateStatus(e.target.value as OrderStatus);
+                  e.target.value = "";
+                }
+              }}
+              className="h-8.5 rounded-xl bg-gray-800 dark:bg-gray-700 border border-gray-600 px-3 text-xs text-white outline-none focus:border-brand-500 cursor-pointer"
+            >
+              <option value="" disabled>
+                Ubah Status Massal...
+              </option>
+              <option value="Dalam Daftar">Dalam Daftar</option>
+              <option value="Pending">Pending</option>
+              <option value="Proses Design">Proses Design</option>
+              <option value="Pengerjaan">Pengerjaan</option>
+              <option value="Pengiriman">Pengiriman</option>
+              <option value="Selesai">Selesai</option>
+              <option value="Trouble">Trouble</option>
+            </select>
+          </div>
+
+          {/* Tugaskan Staf Massal */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400 whitespace-nowrap hidden sm:inline">
+              Tugaskan:
+            </span>
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleBulkUpdateAssignee(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+              className="h-8.5 rounded-xl bg-gray-800 dark:bg-gray-700 border border-gray-600 px-3 text-xs text-white outline-none focus:border-brand-500 cursor-pointer"
+            >
+              <option value="" disabled>
+                Tugaskan Staf Massal...
+              </option>
+              <option value="UNASSIGNED">-- Kosongkan Penugasan --</option>
+              {staffList.map((s) => {
+                const autoStatus = getMappedStatusForAssignee(s.id);
+                return (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name || s.email} {autoStatus ? `(Auto: ${autoStatus})` : ""}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Tombol Batal */}
+          <button
+            onClick={handleClearSelection}
+            className="ml-auto px-3.5 py-1.5 text-xs font-medium text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-xl transition-colors cursor-pointer whitespace-nowrap border border-gray-700"
+          >
+            Batal
+          </button>
+        </div>
+      )}
+
+      {/* MODAL PENGATURAN PEMETAAN DINAMIS (KHUSUS OWNER) */}
+      {isOwner && (
+        <StatusMappingModal
+          isOpen={isMappingModalOpen}
+          onClose={() => setIsMappingModalOpen(false)}
+          staffList={staffList}
+          onMappingsUpdated={fetchStatusMappings}
+        />
+      )}
     </div>
   );
 }
