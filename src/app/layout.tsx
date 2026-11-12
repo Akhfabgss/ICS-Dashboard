@@ -11,11 +11,11 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: {
-    default: "Framelo - POS & Management System",
-    template: "%s | Framelo POS",
+    default: "ICS Management System",
+    template: "%s | ICS POS",
   },
   description:
-    "Sistem Manajemen Kasir POS, Stok Produk, Pemesanan, dan Keuangan Toko Framelo.",
+    "Sistem Manajemen Kasir POS, Stok Produk, Pemesanan, dan Keuangan Toko ICS.",
   icons: {
     icon: "/images/favicon2.ico",
 

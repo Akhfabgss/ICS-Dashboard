@@ -1,133 +1,120 @@
 import { supabase } from "@/lib/supabase";
 
 /**
- * Mengurangi stok bahan baku (stock_out) berdasarkan resep produk & addon
- * yang tersimpan di tabel product_recipes dan addon_recipes.
+ * Mengurangi stok bahan baku lab berdasarkan resep (BOM) produk yang tersimpan di database Supabase.
+ * Dipanggil secara otomatis saat status submisi berubah menjadi 'Selesai & Kirim' (COMPLETED).
  *
- * @param productName - Nama produk yang dipesan (akan di-resolve ke ID)
- * @param addonNames  - Array nama addon yang dipesan (akan di-resolve ke IDs)
- * @param orderQty    - Jumlah quantity order (default 1)
+ * @param productName - Nama produk/layanan grading yang dipesan (misal: "Express Grading (3 Hari)")
+ * @param orderQty    - Jumlah kartu/item yang diproses (default: 1)
+ * @param referenceNo - Nomor referensi submisi (misal: "SUB-829101")
  */
 export async function deductStockForOrder(
   productName: string,
-  addonNames: string[] = [],
-  orderQty: number = 1
-): Promise<void> {
+  orderQty: number = 1,
+  referenceNo: string = "AUTO-DEDUCT"
+): Promise<{ success: boolean; message: string }> {
   try {
-    // ── 1. Resolve product_id dari product_name ──────────────────────────
+    // ── 1. Cari product_id berdasarkan product_name ──────────────────────────
     const { data: productData, error: productError } = await supabase
       .from("products")
-      .select("id")
+      .select("id, name")
       .eq("name", productName)
       .maybeSingle();
 
     if (productError) {
-      console.error("stockDeduction: Gagal mengambil product:", productError.message);
-      return;
+      console.error("stockDeduction: Gagal mengambil data produk:", productError.message);
+      return { success: false, message: `Gagal membaca produk: ${productError.message}` };
     }
 
-    const productId = productData?.id ?? null;
-
-    // ── 2. Resolve addon_ids dari addon_names ────────────────────────────
-    let addonIds: string[] = [];
-    if (addonNames.length > 0) {
-      // Filter hanya nama yang benar-benar ada (bukan string "Tambah foto (N Foto)")
-      const cleanAddonNames = addonNames.filter(
-        (n) => !n.toLowerCase().includes("tambah foto")
-      );
-
-      if (cleanAddonNames.length > 0) {
-        const { data: addonData, error: addonError } = await supabase
-          .from("add_ons")
-          .select("id")
-          .in("name", cleanAddonNames);
-
-        if (addonError) {
-          console.error("stockDeduction: Gagal mengambil addon IDs:", addonError.message);
-        } else if (addonData) {
-          addonIds = addonData.map((a) => a.id);
-        }
-      }
+    if (!productData) {
+      console.warn(`stockDeduction: Produk "${productName}" tidak ditemukan di tabel products.`);
+      return { success: false, message: `Produk "${productName}" tidak ditemukan.` };
     }
 
-    // ── 3. Ambil Resep Produk Utama ──────────────────────────────────────
-    let productRecipes: { inventory_id: string; quantity_required: number }[] = [];
-    if (productId) {
-      const { data: pRecipes, error: pError } = await supabase
-        .from("product_recipes")
-        .select("inventory_id, quantity_required")
-        .eq("product_id", productId);
+    // ── 2. Ambil Resep Bahan Lab (BOM) untuk Produk Ini ────────────────────
+    const { data: recipes, error: recipeError } = await supabase
+      .from("product_recipes")
+      .select("inventory_id, quantity_required")
+      .eq("product_id", productData.id);
 
-      if (pError) {
-        console.error("stockDeduction: Gagal mengambil resep produk:", pError.message);
-      } else if (pRecipes) {
-        productRecipes = pRecipes;
-      }
+    if (recipeError) {
+      console.error("stockDeduction: Gagal mengambil resep produk:", recipeError.message);
+      return { success: false, message: `Gagal mengambil resep: ${recipeError.message}` };
     }
 
-    // ── 4. Ambil Resep Add-ons ───────────────────────────────────────────
-    let addonRecipes: { inventory_id: string; quantity_required: number }[] = [];
-    if (addonIds.length > 0) {
-      const { data: aRecipes, error: aError } = await supabase
-        .from("addon_recipes")
-        .select("inventory_id, quantity_required")
-        .in("addon_id", addonIds);
-
-      if (aError) {
-        console.error("stockDeduction: Gagal mengambil resep addon:", aError.message);
-      } else if (aRecipes) {
-        addonRecipes = aRecipes;
-      }
+    if (!recipes || recipes.length === 0) {
+      console.log(`stockDeduction: Tidak ada resep bahan (BOM) yang terikat pada produk "${productName}".`);
+      return { success: true, message: "Tidak ada resep bahan yang dipotong." };
     }
 
-    // ── 5. Gabungkan & akumulasi bahan baku per inventory_id ─────────────
-    const allMaterials = [...productRecipes, ...addonRecipes];
-
-    if (allMaterials.length === 0) {
-      console.log(`stockDeduction: Tidak ada resep ditemukan untuk produk "${productName}". Stok tidak dipotong.`);
-      return;
-    }
-
-    // Akumulasi quantity per inventory_id (hindari duplikasi)
+    // ── 3. Akumulasi Kebutuhan Bahan Per inventory_id ────────────────────────
     const materialMap: Record<string, number> = {};
-    for (const item of allMaterials) {
-      const key = item.inventory_id;
-      materialMap[key] = (materialMap[key] ?? 0) + Number(item.quantity_required) * orderQty;
+    for (const item of recipes) {
+      const invId = item.inventory_id;
+      const totalRequired = Number(item.quantity_required) * orderQty;
+      materialMap[invId] = (materialMap[invId] ?? 0) + totalRequired;
     }
 
-    // ── 6. Update stock_out untuk setiap bahan baku ──────────────────────
+    // ── 4. Eksekusi Pemotongan Stok & Catat Mutasi ke Supabase ─────────────
     for (const [inventoryId, qtyToDeduct] of Object.entries(materialMap)) {
-      const { data: inv, error: fetchError } = await supabase
-        .from("inventory")
-        .select("id, stock_out")
+      // Ambil data stok saat ini
+      const { data: invItem, error: fetchInvError } = await supabase
+        .from("lab_inventory")
+        .select("id, sku, name, current_stock, min_stock")
         .eq("id", inventoryId)
         .maybeSingle();
 
-      if (fetchError) {
-        console.error(`stockDeduction: Gagal membaca inventory id=${inventoryId}:`, fetchError.message);
+      if (fetchInvError || !invItem) {
+        console.error(`stockDeduction: Item inventory ID=${inventoryId} tidak ditemukan.`);
         continue;
       }
 
-      if (!inv) {
-        console.warn(`stockDeduction: Item inventory id=${inventoryId} tidak ditemukan. Dilewati.`);
-        continue;
-      }
+      // Hitung stok baru dan tentukan status aman/menipis
+      const newStock = Math.max(0, Number(invItem.current_stock || 0) - qtyToDeduct);
+      const newStatus = newStock <= invItem.min_stock ? "Menipis" : "Aman";
 
-      const currentStockOut = Number(inv.stock_out ?? 0);
-      const newStockOut = currentStockOut + qtyToDeduct;
-
-      const { error: updateError } = await supabase
-        .from("inventory")
-        .update({ stock_out: newStockOut })
+      // Update tabel lab_inventory
+      const { error: updateInvError } = await supabase
+        .from("lab_inventory")
+        .update({
+          current_stock: newStock,
+          status: newStatus,
+        })
         .eq("id", inventoryId);
 
-      if (updateError) {
-        console.error(`stockDeduction: Gagal update inventory id=${inventoryId}:`, updateError.message);
+      if (updateInvError) {
+        console.error(`stockDeduction: Gagal update stok inventory SKU ${invItem.sku}:`, updateInvError.message);
+        continue;
+      }
+
+      // Catat log ke tabel stock_mutations
+      const { error: mutationError } = await supabase
+        .from("stock_mutations")
+        .insert({
+          item_id: invItem.id,
+          item_sku: invItem.sku,
+          item_name: invItem.name,
+          type: "OUT",
+          quantity: qtyToDeduct,
+          reference_no: referenceNo,
+          notes: `Otomatis terpotong: Submisi ${productName} (${orderQty} kartu)`,
+        });
+
+      if (mutationError) {
+        console.error(`stockDeduction: Gagal mencatat mutasi stok SKU ${invItem.sku}:`, mutationError.message);
       } else {
-        console.log(`stockDeduction: inventory id=${inventoryId} → stock_out: ${currentStockOut} + ${qtyToDeduct} = ${newStockOut}`);
+        console.log(
+          `stockDeduction: Sukses memotong SKU ${invItem.sku} (-${qtyToDeduct}). Stok sisa: ${newStock}`
+        );
       }
     }
+
+    return {
+      success: true,
+      message: `Stok bahan lab untuk ${productName} (${orderQty} kartu) berhasil dipotong.`,
+    };
   } catch (error) {
     console.error("stockDeduction: Unexpected error:", error);
+    return { success: false, message: "Terjadi kesalahan sistem saat pemotongan stok." };
   }
 }

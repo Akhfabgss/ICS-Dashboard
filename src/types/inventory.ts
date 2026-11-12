@@ -1,11 +1,22 @@
-export interface InventoryItem {
+export interface LabInventoryItem {
   id: string;
-  date: string;
+  sku: string;
+  name: string;
+  current_stock: number;
+  min_stock: number;
+  unit_cost: number;
+  status: "Aman" | "Menipis" | "Habis";
+  vendor?: string; // Teks nama supplier atau URL Link Pembelian (opsional)
+}
+
+export interface StockMutation {
+  id: string;
+  item_id: string;
+  item_sku: string;
   item_name: string;
-  stock_in: number;
-  stock_out: number;
-  remaining_stock: number;
-  vendor: string;
-  category: 'Bingkai' | 'Packaging' | 'Merchandise';
+  type: "IN" | "OUT";
+  quantity: number;
+  reference_no: string;
+  notes: string;
   created_at: string;
 }

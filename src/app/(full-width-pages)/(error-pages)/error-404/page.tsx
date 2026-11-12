@@ -6,9 +6,9 @@ import React from "react";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Framelo Error 404 - POS & Management System",
+  title: "ICS Error 404 - Management System",
   description:
-    "Sistem Manajemen POS, Stok Material, dan Pengelolaan Keuangan Toko Framelo.",
+    "Sistem Manajemen POS, Stok Material, dan Pengelolaan Keuangan Toko ICS.",
 };
 
 export default function Error404() {
