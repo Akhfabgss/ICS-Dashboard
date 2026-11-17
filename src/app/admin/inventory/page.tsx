@@ -539,7 +539,7 @@ export default function InventoryPage() {
             <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400 tracking-wider font-semibold border-b border-gray-200 dark:border-gray-800">
               <tr>
                 <th className="py-3 px-3">Waktu</th>
-                <th className="py-3 px-3">SKU &amp; Komponen</th>
+                <th className="py-3 px-3">Komponen</th>
                 <th className="py-3 px-3 text-center">Tipe Mutasi</th>
                 <th className="py-3 px-3 text-center">Jumlah</th>
                 <th className="py-3 px-3">Referensi</th>
@@ -569,9 +569,6 @@ export default function InventoryPage() {
                       })}
                     </td>
                     <td className="py-3 px-3">
-                      <span className="font-mono font-bold text-brand-600 dark:text-brand-400 mr-2">
-                        {mut.item_sku}
-                      </span>
                       <span className="font-medium text-gray-800 dark:text-gray-200">
                         {mut.item_name}
                       </span>

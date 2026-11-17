@@ -15,10 +15,9 @@ export const metadata: Metadata = {
     template: "%s | ICS POS",
   },
   description:
-    "Sistem Manajemen Kasir POS, Stok Produk, Pemesanan, dan Keuangan Toko ICS.",
+    "Sistem Manajemen Kasir POS, Stok Produk, Pemesanan, dan Keuangan ICS.",
   icons: {
-    icon: "/images/favicon2.ico",
-
+    icon: "/images/favicon3.ico",
   },
 };
 

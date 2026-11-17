@@ -6,7 +6,7 @@ create table public.card_registry (
   set_name text not null,
   card_number text null,
   language text null default 'Japanese'::text,
-  tcg_type public.tcg_category null default 'POKEMON'::tcg_category,
+  tcg_type text null default 'OTHER'::text,
   final_grade numeric(3, 1) not null,
   grade_label text not null,
   sub_centering numeric(3, 1) not null,
@@ -20,11 +20,16 @@ create table public.card_registry (
   is_encapsulated boolean null default true,
   is_frozen boolean null default false,
   created_at timestamp with time zone null default now(),
+  collector_id uuid null,
+  points integer not null default 0,
   constraint card_registry_pkey primary key (id),
   constraint card_registry_cert_number_key unique (cert_number),
   constraint card_registry_nfc_uid_key unique (nfc_uid),
+  constraint card_registry_collector_id_fkey foreign KEY (collector_id) references collectors (id) on delete set null,
   constraint card_registry_submission_id_fkey foreign KEY (submission_id) references submissions (id) on delete set null
 ) TABLESPACE pg_default;
+
+create index IF not exists idx_card_registry_collector_id on public.card_registry using btree (collector_id) TABLESPACE pg_default;
 
 create table public.cash_flows (
   id uuid not null default gen_random_uuid (),
@@ -38,17 +43,24 @@ create table public.cash_flows (
   constraint cash_flows_pkey primary key (id)
 ) TABLESPACE pg_default;
 
-create table public.inventory (
+create table public.collectors (
   id uuid not null default gen_random_uuid (),
-  sku character varying(50) not null,
-  item_name text not null,
-  category text not null,
-  stock_qty integer not null default 0,
-  min_stock_qty integer not null default 10,
-  unit_cost numeric(10, 2) not null default 0.00,
-  updated_at timestamp with time zone null default now(),
-  constraint inventory_pkey primary key (id),
-  constraint inventory_sku_key unique (sku)
+  user_id uuid null,
+  username text not null,
+  display_name text not null,
+  whatsapp_no text null,
+  location text null default 'Indonesia'::text,
+  bio text null,
+  avatar_bg text not null default 'from-indigo-500 to-purple-600'::text,
+  manual_points integer not null default 0,
+  sets_completed integer not null default 0,
+  badge text not null default 'Rookie Collector'::text,
+  join_date date not null default CURRENT_DATE,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  constraint collectors_pkey primary key (id),
+  constraint collectors_username_key unique (username),
+  constraint collectors_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete set null
 ) TABLESPACE pg_default;
 
 create table public.lab_inventory (
@@ -70,8 +82,8 @@ create table public.product_categories (
   name text not null,
   slug text not null,
   status text null default 'Active'::text,
-  description text null,
   created_at timestamp with time zone null default now(),
+  sub_types text[] not null default array['OTHER'::text],
   constraint product_categories_pkey primary key (id),
   constraint product_categories_slug_key unique (slug)
 ) TABLESPACE pg_default;
@@ -87,15 +99,15 @@ create table public.product_recipes (
   constraint product_recipes_product_id_fkey foreign KEY (product_id) references products (id) on delete CASCADE
 ) TABLESPACE pg_default;
 
-create table public.products (
+create table public.product_recipes (
   id uuid not null default gen_random_uuid (),
-  item_type text not null,
-  name text not null,
-  price numeric not null default 0,
-  is_active boolean null default true,
+  product_id uuid null,
+  inventory_id uuid null,
+  quantity_required integer not null default 1,
   created_at timestamp with time zone null default now(),
-  category_name text null default 'Card / TCG'::text,
-  constraint products_pkey primary key (id)
+  constraint product_recipes_pkey primary key (id),
+  constraint product_recipes_inventory_id_fkey foreign KEY (inventory_id) references lab_inventory (id) on delete CASCADE,
+  constraint product_recipes_product_id_fkey foreign KEY (product_id) references products (id) on delete CASCADE
 ) TABLESPACE pg_default;
 
 create table public.profiles (
@@ -144,13 +156,11 @@ create table public.stock_mutations (
 create table public.submissions (
   id uuid not null default gen_random_uuid (),
   order_no character varying(20) not null,
-  collector_id uuid null,
   total_cards integer not null default 1,
   total_price numeric(12, 2) not null,
   payment_status text null default 'UNPAID'::text,
   status public.submission_status null default 'PENDING_RECEIPT'::submission_status,
   courier_service text null,
-  tracking_no text null,
   assigned_grader_id uuid null,
   created_at timestamp with time zone null default now(),
   updated_at timestamp with time zone null default now(),
@@ -161,10 +171,12 @@ create table public.submissions (
   shipping_cost numeric(12, 2) null default 0,
   discount_amount numeric(12, 2) null default 0,
   product_id uuid null,
+  category_name text null,
+  dp_amount numeric(12, 2) null default 0,
+  repayment_amount numeric(12, 2) null default 0,
   constraint submissions_pkey primary key (id),
   constraint submissions_order_no_key unique (order_no),
   constraint submissions_assigned_grader_id_fkey foreign KEY (assigned_grader_id) references profiles (id),
-  constraint submissions_collector_id_fkey foreign KEY (collector_id) references profiles (id),
   constraint submissions_product_id_fkey foreign KEY (product_id) references products (id) on delete set null,
   constraint submissions_payment_status_check check (
     (
@@ -172,3 +184,13 @@ create table public.submissions (
     )
   )
 ) TABLESPACE pg_default;
+
+create trigger trg_sync_submission_cashflow
+after INSERT
+or DELETE
+or
+update OF payment_status,
+total_price,
+dp_amount,
+collector_name on submissions for EACH row
+execute FUNCTION fn_sync_submission_cashflow ();
