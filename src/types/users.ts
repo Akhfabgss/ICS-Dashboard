@@ -5,7 +5,8 @@ export type UserRole =
   | 'OPERATOR'
   | 'Owner'
   | 'Bendahara'
-  | 'Staff';
+  | 'Staff'
+  | "COLLECTOR";
 
 export interface UserProfile {
   id: string;

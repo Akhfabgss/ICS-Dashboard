@@ -431,14 +431,15 @@ export default function InventoryPage() {
                       <td className="py-3.5 px-3 font-bold text-gray-900 dark:text-white">
                         {item.name}
                       </td>
-                      <td className="py-3.5 px-3 max-w-[220px]">
+                      <td className="py-3.5 px-3 max-w-[200px]">
                         {item.vendor ? (
                           isUrl ? (
                             <a
                               href={item.vendor}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 truncate"
+                              className="inline-flex items-center gap-1 font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 max-w-full truncate"
+                              title={item.vendor} // Menampilkan URL lengkap saat kursor diarahkan (tooltip)
                             >
                               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                               <span className="truncate">{item.vendor}</span>
@@ -455,8 +456,8 @@ export default function InventoryPage() {
                       <td className="py-3.5 px-3 text-center">
                         <span
                           className={`text-sm font-black ${item.current_stock <= item.min_stock
-                              ? "text-rose-600 dark:text-rose-400"
-                              : "text-gray-900 dark:text-white"
+                            ? "text-rose-600 dark:text-rose-400"
+                            : "text-gray-900 dark:text-white"
                             }`}
                         >
                           {item.current_stock}
@@ -471,10 +472,10 @@ export default function InventoryPage() {
                       <td className="py-3.5 px-3 text-center">
                         <span
                           className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.status === "Aman"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400"
-                              : item.status === "Menipis"
-                                ? "bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 animate-pulse"
-                                : "bg-gray-200 text-gray-700"
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400"
+                            : item.status === "Menipis"
+                              ? "bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400 animate-pulse"
+                              : "bg-gray-200 text-gray-700"
                             }`}
                         >
                           {item.status}
@@ -576,8 +577,8 @@ export default function InventoryPage() {
                     <td className="py-3 px-3 text-center">
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${mut.type === "IN"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400"
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400"
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400"
+                          : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400"
                           }`}
                       >
                         {mut.type === "IN" ? (

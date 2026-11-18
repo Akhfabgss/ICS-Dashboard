@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
@@ -17,13 +17,11 @@ import {
     Edit2,
     Trash2,
     MapPin,
-    Calendar,
     Award,
     Layers,
     Sparkles,
     Eye,
     X,
-    CheckCircle2,
 } from "lucide-react";
 
 export default function CollectorsPage() {
@@ -33,7 +31,6 @@ export default function CollectorsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [badgeFilter, setBadgeFilter] = useState("");
 
-    // Modal Tambah / Edit State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCollector, setEditingCollector] = useState<CollectorRecord | null>(null);
 
@@ -50,8 +47,33 @@ export default function CollectorsPage() {
     const [selectedBadge, setSelectedBadge] = useState("Rookie Collector");
     const [saving, setSaving] = useState(false);
 
-    // Modal Detail Koleksi Kartu
     const [viewingCollector, setViewingCollector] = useState<CollectorRecord | null>(null);
+
+    // Helper untuk mengubah link Google Drive / URL biasa menjadi link direct image yang valid
+    const getDriveImageUrl = (url: string) => {
+        if (!url) return "";
+        let cleanUrl = url.trim();
+
+        // Jika link Google Drive bentuk /file/d/ID/view atau open?id=ID
+        if (cleanUrl.includes("drive.google.com")) {
+            let fileId = "";
+            if (cleanUrl.includes("/file/d/")) {
+                const parts = cleanUrl.split("/file/d/");
+                if (parts[1]) {
+                    fileId = parts[1].split("/")[0];
+                }
+            } else if (cleanUrl.includes("id=")) {
+                const urlParams = new URLSearchParams(cleanUrl.split("?")[1]);
+                fileId = urlParams.get("id") || "";
+            }
+
+            if (fileId) {
+                // Menggunakan endpoint ekspor thumbnail Google Drive agar dapat dirender dengan mulus
+                return `https://lh3.googleusercontent.com/d/${fileId}=s220`;
+            }
+        }
+        return cleanUrl;
+    };
 
     const fetchCollectorsData = async () => {
         setLoading(true);
@@ -79,11 +101,7 @@ export default function CollectorsPage() {
                     const totalSlabs = ownedCards.length;
                     const gemMintCount = ownedCards.filter((c) => Number(c.final_grade) >= 9.5).length;
 
-                    // Jumlahkan poin manual yang diinput di tiap kartu pada card_registry
-                    const cardPoints = ownedCards.reduce(
-                        (sum, c) => sum + (Number(c.points) || 0),
-                        0
-                    );
+                    const cardPoints = ownedCards.reduce((sum, c) => sum + (Number(c.points) || 0), 0);
                     const totalPoints = (Number(col.manual_points) || 0) + cardPoints;
                     const gemMintRatio = totalSlabs > 0 ? Math.round((gemMintCount / totalSlabs) * 1000) / 10 : 0;
 
@@ -149,7 +167,6 @@ export default function CollectorsPage() {
         setIsModalOpen(true);
     };
 
-    // Hitung simulasi total poin di dalam modal
     const previewTotalPoints = useMemo(() => {
         const existingCardPoints = editingCollector ? editingCollector.card_points : 0;
         return (Number(manualPoints) || 0) + existingCardPoints;
@@ -216,11 +233,10 @@ export default function CollectorsPage() {
     const handleDeleteCollector = async (id: string, name: string) => {
         const res = await Swal.fire({
             title: "Hapus Profil Kolektor?",
-            text: `Hapus ${name}? Kartu yang terhubung di registry tidak akan terhapus (hanya melepas relasi pemilik).`,
+            text: `Hapus ${name}?`,
             icon: "warning",
             showCancelButton: true,
             confirmButtonColor: "#EF4444",
-            cancelButtonColor: "#6B7280",
             confirmButtonText: "Ya, Hapus",
             cancelButtonText: "Batal",
         });
@@ -254,7 +270,6 @@ export default function CollectorsPage() {
 
     return (
         <div className="space-y-6 text-xs">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -275,52 +290,67 @@ export default function CollectorsPage() {
                 </button>
             </div>
 
-            {/* Top 3 Leaderboard Cards */}
             {topThree.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {topThree.map((col) => (
-                        <div
-                            key={col.id}
-                            className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-xs flex items-center justify-between gap-3"
-                        >
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div
-                                    className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${col.avatar_bg} flex items-center justify-center text-white font-black text-base shrink-0 shadow-sm`}
-                                >
-                                    {col.display_name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 font-black text-[10px]">
-                                            #{col.rank}
-                                        </span>
-                                        <span className="font-black text-gray-900 dark:text-white truncate">
-                                            {col.display_name}
-                                        </span>
-                                    </div>
-                                    <div className="text-[11px] font-mono text-gray-500 truncate">@{col.username}</div>
-                                    <div className="mt-1">
-                                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getBadgeStyle(col.badge)}`}>
-                                            {col.badge}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
+                    {topThree.map((col) => {
+                        const isImageUrl = col.avatar_bg && (col.avatar_bg.includes("http") || col.avatar_bg.includes("drive.google.com"));
+                        const validImageUrl = getDriveImageUrl(col.avatar_bg);
 
-                            <div className="text-right shrink-0">
-                                <div className="text-sm font-black text-brand-600 dark:text-brand-400">
-                                    {col.total_points.toLocaleString("id-ID")} pts
+                        return (
+                            <div
+                                key={col.id}
+                                className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-xs flex items-center justify-between gap-3"
+                            >
+                                <div className="flex items-center gap-3 min-w-0">
+                                    {isImageUrl ? (
+                                        <div className="w-11 h-11 rounded-2xl overflow-hidden shrink-0 shadow-sm border border-gray-200 dark:border-gray-700 relative bg-gray-100">
+                                            <img
+                                                src={validImageUrl}
+                                                alt={col.display_name}
+                                                className="w-full h-full object-cover absolute inset-0"
+                                                onError={(e) => {
+                                                    // Fallback jika gambar gagal dimuat
+                                                    (e.target as HTMLElement).style.display = 'none';
+                                                }}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${col.avatar_bg || 'from-indigo-500 to-purple-600'} flex items-center justify-center text-white font-black text-base shrink-0 shadow-sm`}>
+                                            {col.display_name.charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 font-black text-[10px]">
+                                                #{col.rank}
+                                            </span>
+                                            <span className="font-black text-gray-900 dark:text-white truncate">
+                                                {col.display_name}
+                                            </span>
+                                        </div>
+                                        <div className="text-[11px] font-mono text-gray-500 truncate">@{col.username}</div>
+                                        <div className="mt-1">
+                                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getBadgeStyle(col.badge)}`}>
+                                                {col.badge}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="text-[11px] text-gray-500 font-semibold">
-                                    {col.total_slabs} Slabs • {col.gem_mint_ratio}% GM
+
+                                <div className="text-right shrink-0">
+                                    <div className="text-sm font-black text-brand-600 dark:text-brand-400">
+                                        {col.total_points.toLocaleString("id-ID")} pts
+                                    </div>
+                                    <div className="text-[11px] text-gray-500 font-semibold">
+                                        {col.total_slabs} Slabs • {col.gem_mint_ratio}% GM
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
-            {/* Filter & Tabel Kolektor */}
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -342,9 +372,7 @@ export default function CollectorsPage() {
                         >
                             <option value="">Semua Tier Badge</option>
                             {COLLECTOR_BADGES.map((b) => (
-                                <option key={b.name} value={b.name}>
-                                    {b.name}
-                                </option>
+                                <option key={b.name} value={b.name}>{b.name}</option>
                             ))}
                         </select>
                     </div>
@@ -354,7 +382,6 @@ export default function CollectorsPage() {
                     </span>
                 </div>
 
-                {/* Horizontal Scroll Table */}
                 <div className="overflow-x-auto pb-2">
                     <table className="w-full min-w-[1150px] text-left">
                         <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400 font-semibold border-b border-gray-200 dark:border-gray-800">
@@ -373,158 +400,120 @@ export default function CollectorsPage() {
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={9} className="py-8 text-center text-gray-400">
-                                        Memuat data kolektor...
-                                    </td>
+                                    <td colSpan={9} className="py-8 text-center text-gray-400">Memuat data kolektor...</td>
                                 </tr>
                             ) : filteredCollectors.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="py-8 text-center text-gray-400">
-                                        Belum ada data kolektor terdaftar.
-                                    </td>
+                                    <td colSpan={9} className="py-8 text-center text-gray-400">Belum ada data kolektor terdaftar.</td>
                                 </tr>
                             ) : (
-                                filteredCollectors.map((col) => (
-                                    <tr
-                                        key={col.id}
-                                        className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors"
-                                    >
-                                        {/* 1. Peringkat Registry */}
-                                        <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                                            <span
-                                                className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-black text-xs ${col.rank === 1
-                                                    ? "bg-amber-100 text-amber-800 border border-amber-300"
-                                                    : col.rank === 2
-                                                        ? "bg-slate-200 text-slate-800 border border-slate-300"
-                                                        : col.rank === 3
-                                                            ? "bg-orange-100 text-orange-800 border border-orange-300"
-                                                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
-                                                    }`}
-                                            >
-                                                #{col.rank}
-                                            </span>
-                                        </td>
+                                filteredCollectors.map((col) => {
+                                    const isImageUrl = col.avatar_bg && (col.avatar_bg.includes("http") || col.avatar_bg.includes("drive.google.com"));
+                                    const validImageUrl = getDriveImageUrl(col.avatar_bg);
 
-                                        {/* 2. Avatar + Display Name + Username + Bio */}
-                                        <td className="py-3.5 px-3 max-w-[260px]">
-                                            <div className="flex items-center gap-3">
-                                                <div
-                                                    className={`w-9 h-9 rounded-xl bg-gradient-to-br ${col.avatar_bg} flex items-center justify-center text-white font-black text-sm shrink-0`}
-                                                >
-                                                    {col.display_name.charAt(0).toUpperCase()}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="font-black text-gray-900 dark:text-white truncate">
-                                                        {col.display_name}
-                                                    </div>
-                                                    <div className="text-[11px] font-mono text-brand-600 dark:text-brand-400">
-                                                        @{col.username}
-                                                    </div>
-                                                    {col.bio && (
-                                                        <div className="text-[10px] text-gray-400 truncate mt-0.5" title={col.bio}>
-                                                            {col.bio}
+                                    return (
+                                        <tr key={col.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors">
+                                            <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                                                <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-black text-xs ${col.rank === 1 ? "bg-amber-100 text-amber-800 border border-amber-300" :
+                                                        col.rank === 2 ? "bg-slate-200 text-slate-800 border border-slate-300" :
+                                                            col.rank === 3 ? "bg-orange-100 text-orange-800 border border-orange-300" :
+                                                                "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                                                    }`}>
+                                                    #{col.rank}
+                                                </span>
+                                            </td>
+
+                                            <td className="py-3.5 px-3 max-w-[260px]">
+                                                <div className="flex items-center gap-3">
+                                                    {isImageUrl ? (
+                                                        <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 border border-gray-200 dark:border-gray-700 relative bg-gray-100">
+                                                            <img
+                                                                src={validImageUrl}
+                                                                alt={col.display_name}
+                                                                className="w-full h-full object-cover absolute inset-0"
+                                                                onError={(e) => {
+                                                                    (e.target as HTMLElement).style.display = 'none';
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${col.avatar_bg || 'from-indigo-500 to-purple-600'} flex items-center justify-center text-white font-black text-sm shrink-0`}>
+                                                            {col.display_name.charAt(0).toUpperCase()}
                                                         </div>
                                                     )}
+                                                    <div className="min-w-0">
+                                                        <div className="font-black text-gray-900 dark:text-white truncate">{col.display_name}</div>
+                                                        <div className="text-[11px] font-mono text-brand-600 dark:text-brand-400">@{col.username}</div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
+                                            </td>
 
-                                        {/* 3. Badge */}
-                                        <td className="py-3.5 px-3 whitespace-nowrap">
-                                            <span
-                                                className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black border ${getBadgeStyle(
-                                                    col.badge
-                                                )}`}
-                                            >
-                                                {col.badge}
-                                            </span>
-                                        </td>
+                                            <td className="py-3.5 px-3 whitespace-nowrap">
+                                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black border ${getBadgeStyle(col.badge)}`}>
+                                                    {col.badge}
+                                                </span>
+                                            </td>
 
-                                        {/* 4. Points */}
-                                        <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                            <div className="font-black text-gray-900 dark:text-white">
-                                                {col.total_points.toLocaleString("id-ID")} pts
-                                            </div>
-                                            <div className="text-[10px] text-gray-400">
-                                                Manual: {col.manual_points} • Slab: {col.card_points}
-                                            </div>
-                                        </td>
+                                            <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                                                <div className="font-black text-gray-900 dark:text-white">
+                                                    {col.total_points.toLocaleString("id-ID")} pts
+                                                </div>
+                                            </td>
 
-                                        {/* 5. Total Slab Koleksi */}
-                                        <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                                            <button
-                                                onClick={() => setViewingCollector(col)}
-                                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-black hover:underline cursor-pointer"
-                                            >
-                                                <Layers className="w-3 h-3" />
-                                                {col.total_slabs} Slabs
-                                            </button>
-                                        </td>
-
-                                        {/* 6. Gem Mint Ratio */}
-                                        <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                                            <span className="font-black text-emerald-600 dark:text-emerald-400">
-                                                {col.gem_mint_ratio}%
-                                            </span>
-                                            <div className="text-[10px] text-gray-400">
-                                                ({col.gem_mint_count}/{col.total_slabs} GM)
-                                            </div>
-                                        </td>
-
-                                        {/* 7. Sets Completed */}
-                                        <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                                            <span className="font-bold text-gray-800 dark:text-gray-200">
-                                                {col.sets_completed} Sets
-                                            </span>
-                                        </td>
-
-                                        {/* 8. Location & Join Date */}
-                                        <td className="py-3.5 px-3 whitespace-nowrap">
-                                            <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300 font-medium">
-                                                <MapPin className="w-3 h-3 text-gray-400" />
-                                                {col.location || "-"}
-                                            </div>
-                                            <div className="flex items-center gap-1 text-[10px] text-gray-400 mt-0.5">
-                                                <Calendar className="w-3 h-3" />
-                                                Gabung: {col.join_date}
-                                            </div>
-                                        </td>
-
-                                        {/* 9. Aksi */}
-                                        <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                                            <div className="flex items-center justify-end gap-1.5">
+                                            <td className="py-3.5 px-3 text-center whitespace-nowrap">
                                                 <button
                                                     onClick={() => setViewingCollector(col)}
-                                                    title="Lihat Daftar Slab Koleksi"
-                                                    className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-black hover:underline cursor-pointer"
                                                 >
-                                                    <Eye className="w-4 h-4" />
+                                                    <Layers className="w-3 h-3" /> {col.total_slabs} Slabs
                                                 </button>
-                                                <button
-                                                    onClick={() => handleOpenModal(col)}
-                                                    title="Edit Profil Kolektor"
-                                                    className="p-1.5 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-                                                >
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteCollector(col.id, col.display_name)}
-                                                    title="Hapus Kolektor"
-                                                    className="p-1.5 rounded-lg text-gray-500 hover:text-rose-600 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+
+                                            <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                                                <span className="font-black text-emerald-600 dark:text-emerald-400">{col.gem_mint_ratio}%</span>
+                                            </td>
+
+                                            <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                                                <span className="font-bold text-gray-800 dark:text-gray-200">{col.sets_completed} Sets</span>
+                                            </td>
+
+                                            <td className="py-3.5 px-3 whitespace-nowrap">
+                                                <div className="flex items-center gap-1 text-gray-700 dark:text-gray-300 font-medium">
+                                                    <MapPin className="w-3 h-3 text-gray-400" /> {col.location || "-"}
+                                                </div>
+                                            </td>
+
+                                            <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <button
+                                                        onClick={() => setViewingCollector(col)}
+                                                        className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleOpenModal(col)}
+                                                        className="p-1.5 rounded-lg text-gray-500 hover:text-brand-600 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteCollector(col.id, col.display_name)}
+                                                        className="p-1.5 rounded-lg text-gray-500 hover:text-rose-600 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* MODAL TAMBAH / EDIT KOLEKTOR */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
                     <div className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4 my-8">
@@ -533,44 +522,12 @@ export default function CollectorsPage() {
                                 <Award className="w-5 h-5 text-brand-600" />
                                 {editingCollector ? "Edit Profil Kolektor" : "Tambah Kolektor Baru"}
                             </h3>
-                            <button
-                                onClick={() => setIsModalOpen(false)}
-                                className="p-1 rounded-lg text-gray-400 hover:text-gray-700 cursor-pointer"
-                            >
+                            <button onClick={() => setIsModalOpen(false)} className="p-1 rounded-lg text-gray-400 hover:text-gray-700 cursor-pointer">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
 
                         <form onSubmit={handleSaveCollector} className="space-y-4">
-                            {/* Preview Avatar & Badge */}
-                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
-                                <div className="flex items-center gap-3">
-                                    <div
-                                        className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${avatarBg} flex items-center justify-center text-white font-black text-lg shadow-sm`}
-                                    >
-                                        {(displayName || username || "K").charAt(0).toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <div className="font-black text-sm text-gray-900 dark:text-white">
-                                            {displayName || "Nama Tampilan Kolektor"}
-                                        </div>
-                                        <div className="font-mono text-gray-500">
-                                            @{username || "username_kolektor"}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="text-right">
-                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black border ${getBadgeStyle(effectiveBadge)}`}>
-                                        {effectiveBadge}
-                                    </span>
-                                    <div className="font-black text-brand-600 dark:text-brand-400 mt-1">
-                                        Total: {previewTotalPoints.toLocaleString("id-ID")} pts
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Baris 1: Username & Display Name */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="block font-semibold mb-1">Username Kolektor (Unik) *</label>
@@ -579,7 +536,6 @@ export default function CollectorsPage() {
                                         required
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
-                                        placeholder="e.g. ash_ketchum99"
                                         className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono"
                                     />
                                 </div>
@@ -591,21 +547,18 @@ export default function CollectorsPage() {
                                         required
                                         value={displayName}
                                         onChange={(e) => setDisplayName(e.target.value)}
-                                        placeholder="e.g. Ash Ketchum"
                                         className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold"
                                     />
                                 </div>
                             </div>
 
-                            {/* Baris 2: Lokasi, Join Date, WhatsApp */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div>
-                                    <label className="block font-semibold mb-1">Location (Kota / Negara)</label>
+                                    <label className="block font-semibold mb-1">Location</label>
                                     <input
                                         type="text"
                                         value={location}
                                         onChange={(e) => setLocation(e.target.value)}
-                                        placeholder="Jakarta, Indonesia"
                                         className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                                     />
                                 </div>
@@ -621,102 +574,14 @@ export default function CollectorsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block font-semibold mb-1">No. WhatsApp (Opsional)</label>
+                                    <label className="block font-semibold mb-1">No. WhatsApp</label>
                                     <input
                                         type="tel"
                                         value={whatsappNo}
                                         onChange={(e) => setWhatsappNo(e.target.value)}
-                                        placeholder="0812xxxxxxxx"
                                         className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                                     />
                                 </div>
-                            </div>
-
-                            {/* Baris 3: Points Manual, Sets Completed, Badge */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div>
-                                    <label className="block font-semibold mb-1">Manual / Bonus Points</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={manualPoints}
-                                        onChange={(e) => setManualPoints(parseInt(e.target.value) || 0)}
-                                        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold"
-                                    />
-                                    {editingCollector && (
-                                        <span className="text-[10px] text-gray-400">
-                                            + {editingCollector.card_points} pts dari {editingCollector.total_slabs} slab
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block font-semibold mb-1">Sets Completed</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={setsCompleted}
-                                        onChange={(e) => setSetsCompleted(parseInt(e.target.value) || 0)}
-                                        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block font-semibold mb-1">Badge Tier</label>
-                                    <select
-                                        value={badgeMode === "AUTO" ? "AUTO" : selectedBadge}
-                                        onChange={(e) => {
-                                            if (e.target.value === "AUTO") {
-                                                setBadgeMode("AUTO");
-                                            } else {
-                                                setBadgeMode("MANUAL");
-                                                setSelectedBadge(e.target.value);
-                                            }
-                                        }}
-                                        className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold cursor-pointer"
-                                    >
-                                        <option value="AUTO">Otomatis ({getRecommendedBadge(previewTotalPoints)})</option>
-                                        {COLLECTOR_BADGES.map((b) => (
-                                            <option key={b.name} value={b.name}>
-                                                {b.name} ({b.minPoints}+ pts)
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Baris 4: Pilihan Warna Avatar (avatarBg) */}
-                            <div>
-                                <label className="block font-semibold mb-1.5">Avatar Background (avatarBg)</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {AVATAR_BG_OPTIONS.map((opt) => (
-                                        <button
-                                            key={opt.value}
-                                            type="button"
-                                            onClick={() => setAvatarBg(opt.value)}
-                                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold cursor-pointer transition-all ${avatarBg === opt.value
-                                                ? "border-brand-600 bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300"
-                                                : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"
-                                                }`}
-                                        >
-                                            <span className={`w-4 h-4 rounded-full bg-gradient-to-br ${opt.value}`} />
-                                            {opt.label}
-                                            {avatarBg === opt.value && <CheckCircle2 className="w-3.5 h-3.5 text-brand-600" />}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Baris 5: Bio */}
-                            <div>
-                                <label className="block font-semibold mb-1">Bio Kolektor</label>
-                                <textarea
-                                    rows={2}
-                                    value={bio}
-                                    onChange={(e) => setBio(e.target.value)}
-                                    placeholder="Deskripsi singkat fokus koleksi (misal: Vintage Base Set & Japanese Promo Collector)..."
-                                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
-                                />
                             </div>
 
                             <div className="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-800">
@@ -740,50 +605,32 @@ export default function CollectorsPage() {
                 </div>
             )}
 
-            {/* MODAL DAFTAR SLAB KOLEKSI MILIK KOLEKTOR */}
             {viewingCollector && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
                     <div className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
                         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-                            <div>
-                                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <Sparkles className="w-4 h-4 text-amber-500" />
-                                    Koleksi Slab: {viewingCollector.display_name} (@{viewingCollector.username})
-                                </h3>
-                                <p className="text-[11px] text-gray-500">
-                                    Peringkat #{viewingCollector.rank} • {viewingCollector.total_slabs} Total Slabs • Gem Mint Ratio:{" "}
-                                    <strong className="text-emerald-600">{viewingCollector.gem_mint_ratio}%</strong>
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setViewingCollector(null)}
-                                className="p-1 rounded-lg text-gray-400 hover:text-gray-700 cursor-pointer"
-                            >
+                            <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-amber-500" />
+                                Koleksi Slab: {viewingCollector.display_name} (@{viewingCollector.username})
+                            </h3>
+                            <button onClick={() => setViewingCollector(null)} className="p-1 rounded-lg text-gray-400 hover:text-gray-700 cursor-pointer">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
 
                         <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
                             {(cardsByCollector[viewingCollector.id] || []).length === 0 ? (
-                                <div className="py-10 text-center text-gray-400">
-                                    Belum ada slab kartu yang tertaut ke kolektor ini. Anda dapat menautkannya saat membuat/edit submisi.
-                                </div>
+                                <div className="py-10 text-center text-gray-400">Belum ada slab kartu yang tertaut ke kolektor ini.</div>
                             ) : (
                                 (cardsByCollector[viewingCollector.id] || []).map((card: any) => (
                                     <div key={card.id} className="py-2.5 flex items-center justify-between gap-3">
                                         <div>
                                             <div className="font-bold text-gray-900 dark:text-white">{card.card_name}</div>
-                                            <div className="text-[11px] text-gray-500">
-                                                {card.set_name} • Cert: <span className="font-mono">{card.cert_number}</span>
-                                            </div>
+                                            <div className="text-[11px] text-gray-500">{card.set_name} • Cert: <span className="font-mono">{card.cert_number}</span></div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold">
-                                                +{card.points || 0} pts
-                                            </span>
-                                            <span className="px-2.5 py-1 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-200 font-black">
-                                                {card.final_grade} ({card.grade_label})
-                                            </span>
+                                            <span className="px-2 py-0.5 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-bold">+{card.points || 0} pts</span>
+                                            <span className="px-2.5 py-1 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-200 font-black">{card.final_grade}</span>
                                         </div>
                                     </div>
                                 ))

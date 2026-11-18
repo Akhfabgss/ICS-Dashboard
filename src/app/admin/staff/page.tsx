@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
@@ -31,7 +31,6 @@ export default function StaffPage() {
   const [profiles, setProfiles] = useState<ExtendedProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"STAFF" | "COLLECTOR" | "ALL">("STAFF");
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -45,15 +44,19 @@ export default function StaffPage() {
   const fetchProfiles = async () => {
     setLoading(true);
     try {
+      // Mengambil data profiles dan mengecualikan role COLLECTOR (murni Staff Internal Lab)
       const [profRes, subsRes] = await Promise.all([
-        supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+        supabase
+          .from("profiles")
+          .select("*")
+          .neq("role", "COLLECTOR")
+          .order("created_at", { ascending: false }),
         supabase
           .from("submissions")
           .select("assigned_grader_id, total_cards, status")
           .not("status", "in", '("COMPLETED","REJECTED")'),
       ]);
 
-      // Hitung total kartu aktif per grader
       const taskCountMap: Record<string, number> = {};
       if (subsRes.data) {
         subsRes.data.forEach((sub: any) => {
@@ -71,7 +74,7 @@ export default function StaffPage() {
           full_name: item.full_name || "Belum Diisi",
           whatsapp_no: item.whatsapp_no || "",
           address: item.address || "",
-          role: (item.role as UserRole) || "COLLECTOR",
+          role: item.role as UserRole,
           is_profile_completed: Boolean(item.is_profile_completed),
           active_tasks: taskCountMap[item.id] || 0,
           created_at: item.created_at || new Date().toISOString(),
@@ -79,7 +82,7 @@ export default function StaffPage() {
         setProfiles(sanitized);
       }
     } catch (e) {
-      console.error("Gagal memuat profiles:", e);
+      console.error("Gagal memuat profiles staff:", e);
     } finally {
       setLoading(false);
     }
@@ -95,7 +98,7 @@ export default function StaffPage() {
     setFormUsername(user.username || "");
     setFormPhone(user.whatsapp_no || "");
     setFormAddress(user.address || "");
-    setFormRole(user.role || "COLLECTOR");
+    setFormRole(user.role);
     setIsModalOpen(true);
   };
 
@@ -125,18 +128,18 @@ export default function StaffPage() {
         throw error;
       }
 
-      Swal.fire("Profil Diperbarui!", `Data akun ${formName} berhasil disimpan.`, "success");
+      Swal.fire("Profil Diperbarui!", `Data staff ${formName} berhasil disimpan.`, "success");
       setIsModalOpen(false);
       fetchProfiles();
     } catch (err: any) {
-      Swal.fire("Gagal Menyimpan!", err.message || "Periksa policy RLS tabel profiles.", "error");
+      Swal.fire("Gagal Menyimpan!", err.message || "Terjadi kesalahan database.", "error");
     }
   };
 
   const handleDeleteProfile = async (id: string, name: string) => {
     const result = await Swal.fire({
-      title: "Hapus Profil Pengguna?",
-      text: `Hapus data profil ${name}?`,
+      title: "Hapus Staff?",
+      text: `Hapus data staff ${name}?`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#EF4444",
@@ -149,7 +152,7 @@ export default function StaffPage() {
       const { error } = await supabase.from("profiles").delete().eq("id", id);
       if (!error) {
         setProfiles((prev) => prev.filter((s) => s.id !== id));
-        Swal.fire("Terhapus!", `Profil ${name} telah dihapus.`, "success");
+        Swal.fire("Terhapus!", `Staff ${name} telah dihapus.`, "success");
       } else {
         Swal.fire("Gagal Hapus!", error.message, "error");
       }
@@ -157,10 +160,6 @@ export default function StaffPage() {
   };
 
   const filteredProfiles = profiles.filter((p) => {
-    const isStaff = ["OWNER", "ADMIN", "SENIOR_GRADER", "OPERATOR"].includes(p.role);
-    if (roleFilter === "STAFF" && !isStaff) return false;
-    // if (roleFilter === "COLLECTOR" && p.role !== "COLLECTOR") return false;
-
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -174,51 +173,18 @@ export default function StaffPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
             <Users2 className="w-6 h-6 text-brand-600" />
-            Manajemen Profil Pengguna &amp; Staff Roles
+            Manajemen Staff Internal Lab
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Kelola data lengkap profil (Nama, Username, WhatsApp, Alamat) dan hak akses role tim lab maupun kolektor.
+            Kelola hak akses role tim internal lab (Owner, Admin, Senior Grader, Operator).
           </p>
-        </div>
-
-        {/* Tab Filter Role */}
-        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs font-bold self-start">
-          <button
-            onClick={() => setRoleFilter("STAFF")}
-            className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${roleFilter === "STAFF"
-                ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs"
-                : "text-gray-500"
-              }`}
-          >
-            Tim Internal Lab
-          </button>
-          <button
-            onClick={() => setRoleFilter("COLLECTOR")}
-            className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${roleFilter === "COLLECTOR"
-                ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs"
-                : "text-gray-500"
-              }`}
-          >
-            Kolektor
-          </button>
-          <button
-            onClick={() => setRoleFilter("ALL")}
-            className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${roleFilter === "ALL"
-                ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs"
-                : "text-gray-500"
-              }`}
-          >
-            Semua ({profiles.length})
-          </button>
         </div>
       </div>
 
-      {/* Tabel Profiles */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="relative sm:w-80">
@@ -232,7 +198,7 @@ export default function StaffPage() {
             />
           </div>
           <span className="text-xs font-semibold text-gray-500">
-            Menampilkan {filteredProfiles.length} Akun Terdaftar
+            Menampilkan {filteredProfiles.length} Staff Terdaftar
           </span>
         </div>
 
@@ -252,60 +218,49 @@ export default function StaffPage() {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-gray-400">
-                    Memuat data profil...
+                    Memuat data staff...
                   </td>
                 </tr>
               ) : filteredProfiles.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-gray-400">
-                    Tidak ada data profil ditemukan.
+                    Tidak ada data staff ditemukan.
                   </td>
                 </tr>
               ) : (
                 filteredProfiles.map((user) => {
-                  const roleKey = (user.role || "COLLECTOR").toUpperCase();
+                  const roleKey = user.role.toUpperCase();
                   const roleData = ROLE_CONFIG[roleKey] || {
                     badgeClass: "bg-slate-100 text-slate-700 border-slate-300",
                   };
 
                   return (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors"
-                    >
+                    <tr key={user.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition-colors">
                       <td className="py-3.5 px-3">
-                        <div className="font-black text-gray-900 dark:text-white">
-                          {user.full_name}
-                        </div>
+                        <div className="font-black text-gray-900 dark:text-white">{user.full_name}</div>
                         <div className="text-[11px] font-mono text-brand-600 dark:text-brand-400">
                           {user.username ? `@${user.username}` : <span className="text-gray-400 italic">tanpa username</span>}
                         </div>
                       </td>
 
                       <td className="py-3.5 px-3 max-w-xs">
-                        <div className="font-semibold text-gray-800 dark:text-gray-200">
-                          {user.whatsapp_no || "-"}
-                        </div>
+                        <div className="font-semibold text-gray-800 dark:text-gray-200">{user.whatsapp_no || "-"}</div>
                         <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate" title={user.address}>
                           {user.address || <span className="italic text-gray-400">Alamat belum diisi</span>}
                         </div>
                       </td>
 
                       <td className="py-3.5 px-3">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black border ${roleData.badgeClass}`}
-                        >
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black border ${roleData.badgeClass}`}>
                           {roleKey}
                         </span>
                       </td>
 
                       <td className="py-3.5 px-3 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${user.is_profile_completed
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400"
-                            }`}
-                        >
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${user.is_profile_completed
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400"
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400"
+                          }`}>
                           {user.is_profile_completed ? (
                             <>
                               <CheckCircle className="w-3 h-3" /> Lengkap
@@ -335,7 +290,7 @@ export default function StaffPage() {
                           </button>
                           <button
                             onClick={() => handleDeleteProfile(user.id, user.full_name)}
-                            title="Hapus Profil"
+                            title="Hapus Staff"
                             className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -351,13 +306,10 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* MODAL EDIT PROFIL & ROLE */}
       {isModalOpen && editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4 text-xs">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">
-              Edit Profil &amp; Role Pengguna
-            </h3>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">Edit Profil Staff &amp; Role</h3>
 
             <form onSubmit={handleSaveProfile} className="space-y-3">
               <div>
@@ -367,21 +319,18 @@ export default function StaffPage() {
                   required
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  placeholder="e.g. Budi Santoso"
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
 
               <div>
                 <label className="block font-semibold mb-1 flex items-center gap-1">
-                  <AtSign className="w-3.5 h-3.5 text-brand-600" />
-                  Username (Unik)
+                  <AtSign className="w-3.5 h-3.5 text-brand-600" /> Username
                 </label>
                 <input
                   type="text"
                   value={formUsername}
                   onChange={(e) => setFormUsername(e.target.value)}
-                  placeholder="e.g. budi_grader"
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono"
                 />
               </div>
@@ -393,21 +342,18 @@ export default function StaffPage() {
                   required
                   value={formPhone}
                   onChange={(e) => setFormPhone(e.target.value)}
-                  placeholder="0812xxxxxxxx"
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
 
               <div>
                 <label className="block font-semibold mb-1 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-brand-600" />
-                  Alamat Lengkap
+                  <MapPin className="w-3.5 h-3.5 text-brand-600" /> Alamat
                 </label>
                 <textarea
                   rows={2}
                   value={formAddress}
                   onChange={(e) => setFormAddress(e.target.value)}
-                  placeholder="Alamat pengiriman / domisili..."
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
                 />
               </div>
@@ -419,11 +365,10 @@ export default function StaffPage() {
                   onChange={(e) => setFormRole(e.target.value as UserRole)}
                   className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold cursor-pointer"
                 >
-                  <option value="OWNER">OWNER (Full Akses Keuangan &amp; Pegawai)</option>
-                  <option value="ADMIN">ADMIN (Submisi, Keuangan, Stok, Produk)</option>
-                  <option value="SENIOR_GRADER">SENIOR_GRADER (Input 4 Sub-grade &amp; Registri)</option>
-                  <option value="OPERATOR">OPERATOR (Enkapsulasi Slab, NFC &amp; Kurir)</option>
-                  <option value="COLLECTOR">COLLECTOR (Pelanggan / Kolektor Umum)</option>
+                  <option value="OWNER">OWNER</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="SENIOR_GRADER">SENIOR_GRADER</option>
+                  <option value="OPERATOR">OPERATOR</option>
                 </select>
               </div>
 
