@@ -1,3 +1,5 @@
+
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -6,7 +8,13 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
 import { UserProfile } from "@/types/users";
-import { MasterProduct, ServiceCategory } from "@/types/product";
+import {
+    MasterProduct,
+    ServiceCategory,
+    findMatchingCategory,
+    getCategorySubTypes,
+    getFirstSubType,
+} from "@/types/product";
 import { syncSubmissionToCashFlow } from "@/lib/financeSync";
 import CollectorSelectDropdown, {
     CollectorOption,
@@ -83,14 +91,14 @@ export default function EditSubmissionPage() {
     const [dpAmount, setDpAmount] = useState<number>(0);
     const [manualRepaymentInput, setManualRepaymentInput] = useState<number | "">("");
 
-    // Ambil daftar sub_types langsung dari baris product_categories yang dipilih
-    const dynamicSubTypeOptions = useMemo(() => {
-        const activeCatObj = categories.find((c) => c.name === selectedCategory);
-        if (activeCatObj?.sub_types && activeCatObj.sub_types.length > 0) {
-            return activeCatObj.sub_types;
-        }
-        return ["OTHER"];
+    // Ambil object kategori aktif dan daftar sub_types langsung dari product_categories
+    const activeCategoryObj = useMemo(() => {
+        return findMatchingCategory(categories, selectedCategory);
     }, [categories, selectedCategory]);
+
+    const dynamicSubTypeOptions = useMemo(() => {
+        return getCategorySubTypes(activeCategoryObj);
+    }, [activeCategoryObj]);
 
     // 4. Data Isian & Penilaian Item Koleksi
     const [cards, setCards] = useState<CardItemEditInput[]>([]);
@@ -102,7 +110,7 @@ export default function EditSubmissionPage() {
                 setLoading(true);
 
                 const [catRes, prodRes, staffRes, colRes, subRes, cardsRes] = await Promise.all([
-                    supabase.from("product_categories").select("*").eq("status", "Active"),
+                    supabase.from("product_categories").select("*").eq("status", "Active").order("name", { ascending: true }),
                     supabase.from("products").select("*").eq("is_active", true),
                     supabase.from("profiles").select("*").in("role", ["SENIOR_GRADER", "OPERATOR", "ADMIN", "OWNER"]),
                     supabase
@@ -135,8 +143,14 @@ export default function EditSubmissionPage() {
                     setShippingCost(Number(sub.shipping_cost) || 0);
                     setDiscountAmount(Number(sub.discount_amount) || 0);
                     setSavedProductId(sub.product_id || "");
+                    if (sub.order_channel) setOrderChannel(sub.order_channel);
 
                     currentCategory = sub.category_name || cats[0]?.name || "";
+                    const savedProd = allProds.find((p) => String(p.id) === String(sub.product_id));
+                    const matchedCat = findMatchingCategory(cats, currentCategory, savedProd?.category_name);
+                    if (matchedCat) {
+                        currentCategory = matchedCat.name;
+                    }
                     setSelectedCategory(currentCategory);
 
                     const savedDp = Number(sub.dp_amount) || 0;
@@ -153,11 +167,8 @@ export default function EditSubmissionPage() {
                     }
                 }
 
-                const initCatObj = cats.find((c) => c.name === currentCategory);
-                const defaultSubType =
-                    initCatObj?.sub_types && initCatObj.sub_types.length > 0
-                        ? initCatObj.sub_types[0]
-                        : "OTHER";
+                const initCatObj = findMatchingCategory(cats, currentCategory);
+                const defaultSubType = getFirstSubType(initCatObj);
 
                 if (cardsRes.data && cardsRes.data.length > 0) {
                     const loadedCards: CardItemEditInput[] = cardsRes.data.map((c: any) => ({
@@ -223,40 +234,64 @@ export default function EditSubmissionPage() {
             if (match) {
                 setSelectedProductId(match.id);
                 setProductUnitPrice(match.price);
-                if (!selectedCategory && match.category_name) {
-                    setSelectedCategory(match.category_name);
+                if (!selectedCategory) {
+                    const matchedCat = findMatchingCategory(categories, match.category_name);
+                    setSelectedCategory(matchedCat ? matchedCat.name : (match.category_name || ""));
                 }
             }
         }
-    }, [allProducts, savedProductId]);
+    }, [allProducts, savedProductId, selectedCategory, categories]);
 
-    // Handler saat Kategori Layanan diubah -> Reset produk & sesuaikan opsi tcg_type item
+    // Handler saat Kategori Layanan diubah -> Reset produk & sesuaikan opsi tcg_type item dari sub_types kategori terpilih
     const handleCategoryChange = (newCategory: string) => {
-        setSelectedCategory(newCategory);
+        const nextCatObj = findMatchingCategory(categories, newCategory);
+        const resolvedCategoryName = nextCatObj ? nextCatObj.name : newCategory;
+        setSelectedCategory(resolvedCategoryName);
         setSelectedProductId("");
         setProductUnitPrice(0);
 
-        const nextCatObj = categories.find((c) => c.name === newCategory);
-        const defaultSubType =
-            nextCatObj?.sub_types && nextCatObj.sub_types.length > 0
-                ? nextCatObj.sub_types[0]
-                : "OTHER";
-        setCards((prev) => prev.map((c) => ({ ...c, tcg_type: defaultSubType })));
+        const nextSubTypes = getCategorySubTypes(nextCatObj);
+        const defaultSubType = getFirstSubType(nextCatObj);
+        setCards((prev) =>
+            prev.map((c) => {
+                const currentType = (c.tcg_type || "").trim();
+                const isAlreadyValid = nextSubTypes.some(
+                    (opt) => opt.toLowerCase() === currentType.toLowerCase()
+                );
+                return {
+                    ...c,
+                    tcg_type: isAlreadyValid ? c.tcg_type : defaultSubType,
+                };
+            })
+        );
     };
 
     const availableProducts = useMemo(() => {
         if (!selectedCategory) return allProducts;
-        const filtered = allProducts.filter(
-            (p) => p.category_name?.toLowerCase() === selectedCategory.toLowerCase()
-        );
+        const activeCat = findMatchingCategory(categories, selectedCategory);
+        const filtered = allProducts.filter((p) => {
+            const prodCat = findMatchingCategory(categories, p.category_name, p.category_id);
+            if (activeCat && prodCat) {
+                return prodCat.id === activeCat.id;
+            }
+            return (
+                p.category_name?.trim().toLowerCase() === selectedCategory.trim().toLowerCase()
+            );
+        });
         return filtered.length > 0 ? filtered : allProducts;
-    }, [allProducts, selectedCategory]);
+    }, [allProducts, selectedCategory, categories]);
 
     const handleProductSelect = (prodId: string) => {
         setSelectedProductId(prodId);
         const prod = allProducts.find((p) => String(p.id) === String(prodId));
         if (prod) {
             setProductUnitPrice(prod.price);
+            if (prod.category_name) {
+                const matchedCat = findMatchingCategory(categories, prod.category_name, prod.category_id);
+                if (matchedCat && matchedCat.name !== selectedCategory) {
+                    handleCategoryChange(matchedCat.name);
+                }
+            }
         } else {
             setProductUnitPrice(0);
         }
@@ -290,7 +325,7 @@ export default function EditSubmissionPage() {
         setCards([
             ...cards,
             {
-                tempId: `card-${Date.now()}`,
+                tempId: `card-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                 collector_id: defaultCollectorId,
                 points: 0,
                 card_name: "",
@@ -373,7 +408,7 @@ export default function EditSubmissionPage() {
                 .from("submissions")
                 .update({
                     collector_name: collectorName,
-                    category_name: selectedCategory,
+                    category_name: activeCategoryObj?.name || selectedCategory,
                     product_id: selectedProductId || null,
                     phone_number: phoneNumber,
                     address,
@@ -596,6 +631,9 @@ export default function EditSubmissionPage() {
                                 onChange={(e) => handleCategoryChange(e.target.value)}
                                 className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold cursor-pointer focus:outline-none focus:border-brand-500"
                             >
+                                {!categories.some((c) => c.name.toLowerCase() === selectedCategory.toLowerCase()) && selectedCategory && (
+                                    <option value={selectedCategory}>{selectedCategory}</option>
+                                )}
                                 {categories.map((c) => (
                                     <option key={c.id} value={c.name}>
                                         {c.name}
@@ -887,15 +925,17 @@ export default function EditSubmissionPage() {
                                     {/* Dropdown Dinamis dari kolom sub_types di product_categories */}
                                     <div>
                                         <label className="block font-semibold mb-1 text-gray-700 dark:text-gray-300">
-                                            Tipe / Sub-Kategori ({selectedCategory || "Item"})
+                                            Tipe / Sub-Kategori ({activeCategoryObj?.name || selectedCategory || "Item"})
                                         </label>
                                         <select
                                             value={card.tcg_type}
                                             onChange={(e) => handleCardChange(card.tempId, "tcg_type", e.target.value)}
                                             className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium cursor-pointer focus:outline-none focus:border-brand-500"
                                         >
-                                            {card.tcg_type && !dynamicSubTypeOptions.includes(card.tcg_type) && (
-                                                <option value={card.tcg_type}>{card.tcg_type}</option>
+                                            {card.tcg_type && !dynamicSubTypeOptions.some((opt) => opt.toLowerCase() === card.tcg_type.toLowerCase()) && (
+                                                <option value={card.tcg_type}>
+                                                    {card.tcg_type.replace(/_/g, " ")} (Tersimpan)
+                                                </option>
                                             )}
                                             {dynamicSubTypeOptions.map((subCode) => (
                                                 <option key={subCode} value={subCode}>

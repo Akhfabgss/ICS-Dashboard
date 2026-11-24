@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import Swal from "sweetalert2";
 import { UserProfile } from "@/types/users";
-import { MasterProduct, ServiceCategory } from "@/types/product";
+import { MasterProduct, ServiceCategory, findMatchingCategory, getCategorySubTypes, getFirstSubType } from "@/types/product";
 import { syncSubmissionToCashFlow } from "@/lib/financeSync";
 import CollectorSelectDropdown, {
     CollectorOption,
@@ -74,14 +74,14 @@ export default function CreateSubmissionPage() {
     const [dpAmount, setDpAmount] = useState<number>(0);
     const [manualRepaymentInput, setManualRepaymentInput] = useState<number | "">("");
 
-    // Ambil daftar sub_types langsung dari baris product_categories yang dipilih
-    const dynamicSubTypeOptions = useMemo(() => {
-        const activeCatObj = categories.find((c) => c.name === selectedCategory);
-        if (activeCatObj?.sub_types && activeCatObj.sub_types.length > 0) {
-            return activeCatObj.sub_types;
-        }
-        return ["OTHER"];
+    // Ambil objek kategori aktif dan daftar sub_types langsung dari kolom sub_types di product_categories
+    const activeCategoryObj = useMemo(() => {
+        return findMatchingCategory(categories, selectedCategory);
     }, [categories, selectedCategory]);
+
+    const dynamicSubTypeOptions = useMemo(() => {
+        return getCategorySubTypes(activeCategoryObj);
+    }, [activeCategoryObj]);
 
     // 4. Data Isian Item (Card Registry List)
     const [cards, setCards] = useState<CardItemInput[]>([
@@ -112,7 +112,7 @@ export default function CreateSubmissionPage() {
         const fetchMasterData = async () => {
             try {
                 const [catRes, prodRes, staffRes, colRes] = await Promise.all([
-                    supabase.from("product_categories").select("*").eq("status", "Active"),
+                    supabase.from("product_categories").select("*").eq("status", "Active").order("name", { ascending: true }),
                     supabase.from("products").select("*").eq("is_active", true),
                     supabase.from("profiles").select("*").in("role", ["SENIOR_GRADER", "OPERATOR", "ADMIN", "OWNER"]),
                     supabase
@@ -127,11 +127,19 @@ export default function CreateSubmissionPage() {
                     setCategories(cats);
                     setSelectedCategory(initialCat.name);
 
-                    const defaultSubType =
-                        initialCat.sub_types && initialCat.sub_types.length > 0
-                            ? initialCat.sub_types[0]
-                            : "OTHER";
-                    setCards((prev) => prev.map((c) => ({ ...c, tcg_type: defaultSubType })));
+                    const defaultSubType = getFirstSubType(initialCat);
+                    const initialSubTypes = getCategorySubTypes(initialCat);
+                    setCards((prev) =>
+                        prev.map((c) => {
+                            const isCurrentIn = initialSubTypes.some(
+                                (st) => st.trim().toUpperCase() === (c.tcg_type || "").trim().toUpperCase()
+                            );
+                            return {
+                                ...c,
+                                tcg_type: isCurrentIn ? c.tcg_type : defaultSubType,
+                            };
+                        })
+                    );
                 }
 
                 if (prodRes.data && prodRes.data.length > 0) {
@@ -153,30 +161,57 @@ export default function CreateSubmissionPage() {
         fetchMasterData();
     }, []);
 
-    // Handler saat Kategori Layanan di Bagian 2 diubah -> Sinkronkan opsi tcg_type dari database
+    // Handler saat Kategori Layanan di Bagian 2 diubah -> Sinkronkan opsi tcg_type dari sub_types kategori terpilih
     const handleCategoryChange = (newCategory: string) => {
-        setSelectedCategory(newCategory);
+        const nextCatObj = findMatchingCategory(categories, newCategory);
+        const targetCategoryName = nextCatObj ? nextCatObj.name : newCategory;
+        setSelectedCategory(targetCategoryName);
         setSelectedProductId("");
         setProductUnitPrice(0);
 
-        const nextCatObj = categories.find((c) => c.name === newCategory);
-        const defaultSubType =
-            nextCatObj?.sub_types && nextCatObj.sub_types.length > 0
-                ? nextCatObj.sub_types[0]
-                : "OTHER";
-        setCards((prev) => prev.map((c) => ({ ...c, tcg_type: defaultSubType })));
+        const nextSubTypes = getCategorySubTypes(nextCatObj);
+        const defaultSubType = nextSubTypes[0] || "OTHER";
+
+        // Perbarui tcg_type tiap item: jika nilai sebelumnya ada di sub_types kategori baru, pertahankan.
+        // Jika tidak ada di sub_types kategori baru, set ke defaultSubType (elemen pertama).
+        setCards((prev) =>
+            prev.map((c) => {
+                const isCurrentInNew = nextSubTypes.some(
+                    (st) => st.trim().toUpperCase() === (c.tcg_type || "").trim().toUpperCase()
+                );
+                return {
+                    ...c,
+                    tcg_type: isCurrentInNew ? c.tcg_type : defaultSubType,
+                };
+            })
+        );
     };
 
     // Filter Produk Berdasarkan Kategori yang Dipilih
     const availableProducts = useMemo(() => {
-        return allProducts.filter((p) => p.category_name === selectedCategory);
-    }, [allProducts, selectedCategory]);
+        if (!selectedCategory) return allProducts;
+        const catObj = findMatchingCategory(categories, selectedCategory);
+        const catName = catObj ? catObj.name.trim().toLowerCase() : selectedCategory.trim().toLowerCase();
+        const catSlug = catObj ? catObj.slug.trim().toLowerCase() : "";
+
+        const filtered = allProducts.filter((p) => {
+            const pCat = (p.category_name || "").trim().toLowerCase();
+            return pCat === catName || (catSlug && pCat === catSlug);
+        });
+        return filtered.length > 0 ? filtered : allProducts;
+    }, [allProducts, categories, selectedCategory]);
 
     const handleProductSelect = (prodId: string) => {
         setSelectedProductId(prodId);
-        const prod = allProducts.find((p) => p.id === prodId);
+        const prod = allProducts.find((p) => String(p.id) === String(prodId));
         if (prod) {
             setProductUnitPrice(prod.price);
+            if (prod.category_name) {
+                const matchedCat = findMatchingCategory(categories, prod.category_name);
+                if (matchedCat && matchedCat.name.trim().toLowerCase() !== selectedCategory.trim().toLowerCase()) {
+                    handleCategoryChange(matchedCat.name);
+                }
+            }
         } else {
             setProductUnitPrice(0);
         }
@@ -212,7 +247,7 @@ export default function CreateSubmissionPage() {
         setCards([
             ...cards,
             {
-                tempId: `card-${Date.now()}`,
+                tempId: `card-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                 collector_id: defaultCollectorId,
                 points: 0,
                 card_name: "",
@@ -297,7 +332,7 @@ export default function CreateSubmissionPage() {
                 .from("submissions")
                 .insert({
                     order_no: randomOrderNo,
-                    category_name: selectedCategory,
+                    category_name: activeCategoryObj?.name || selectedCategory,
                     product_id: selectedProductId || null,
                     collector_name: collectorName,
                     phone_number: phoneNumber,
@@ -513,6 +548,9 @@ export default function CreateSubmissionPage() {
                                 onChange={(e) => handleCategoryChange(e.target.value)}
                                 className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold cursor-pointer focus:outline-none focus:border-brand-500"
                             >
+                                {!categories.some((c) => c.name.toLowerCase() === selectedCategory.toLowerCase()) && selectedCategory && (
+                                    <option value={selectedCategory}>{selectedCategory}</option>
+                                )}
                                 {categories.map((c) => (
                                     <option key={c.id} value={c.name}>
                                         {c.name}
@@ -804,13 +842,18 @@ export default function CreateSubmissionPage() {
                                     {/* Dropdown Dinamis dari kolom sub_types di product_categories */}
                                     <div>
                                         <label className="block font-semibold mb-1 text-gray-700 dark:text-gray-300">
-                                            Tipe / Sub-Kategori ({selectedCategory || "Item"})
+                                            Tipe / Sub-Kategori ({activeCategoryObj?.name || selectedCategory || "Item"})
                                         </label>
                                         <select
                                             value={card.tcg_type}
                                             onChange={(e) => handleCardChange(card.tempId, "tcg_type", e.target.value)}
                                             className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium cursor-pointer focus:outline-none focus:border-brand-500"
                                         >
+                                            {card.tcg_type && !dynamicSubTypeOptions.some((opt) => opt.toLowerCase() === card.tcg_type.toLowerCase()) && (
+                                                <option value={card.tcg_type}>
+                                                    {card.tcg_type.replace(/_/g, " ")} (Tersimpan)
+                                                </option>
+                                            )}
                                             {dynamicSubTypeOptions.map((subCode) => (
                                                 <option key={subCode} value={subCode}>
                                                     {subCode.replace(/_/g, " ")}
